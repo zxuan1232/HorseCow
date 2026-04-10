@@ -63,6 +63,7 @@
 
   const reportBody = document.getElementById("report-body");
   const weeklyInsightEl = document.getElementById("weekly-insight");
+  const reportGlimpseEl = document.getElementById("report-glimpse");
   const btnReportAgain = document.getElementById("btn-report-again");
   const btnReportHome = document.getElementById("btn-report-home");
   const profileModeHint = document.getElementById("profile-mode-hint");
@@ -631,32 +632,60 @@
     return String(lib[idx] || "").trim();
   }
 
+  function runWeeklyGlimpsePoem() {
+    if (!reportGlimpseEl || !player || !weekData || !window.WeekGen) {
+      if (reportGlimpseEl) {
+        reportGlimpseEl.textContent = "";
+        reportGlimpseEl.hidden = true;
+      }
+      return;
+    }
+    var extra = { choiceLog: choiceLog };
+    reportGlimpseEl.hidden = false;
+    reportGlimpseEl.textContent = "掠影生成中…";
+
+    function applyLocalFallback() {
+      reportGlimpseEl.textContent = window.WeekGen.generateLocalGlimpsePoem(
+        player,
+        weekData,
+        extra,
+      );
+    }
+
+    var ctx = window.WeekGen.buildWeeklyGlimpseContext(player, weekData, extra);
+    if (window.AIClient && window.AIClient.isAiReady()) {
+      window.AIClient
+        .generateWeeklyGlimpsePoem(player, ctx)
+        .then(function (poem) {
+          if (reportGlimpseEl) reportGlimpseEl.textContent = poem;
+        })
+        .catch(function () {
+          applyLocalFallback();
+        });
+    } else {
+      applyLocalFallback();
+    }
+  }
+
   function showWeeklyEnding(reportResult) {
     var body = "";
-    var closing = "";
     if (
       reportResult &&
       typeof reportResult === "object" &&
       typeof reportResult.body === "string"
     ) {
       body = reportResult.body;
-      closing = String(reportResult.closing || "").trim();
     } else if (typeof reportResult === "string") {
       body = reportResult;
     }
     if (weeklyInsightEl) {
-      if (closing) {
-        weeklyInsightEl.textContent = closing;
-        weeklyInsightEl.classList.add("weekly-insight--summary");
-      } else {
-        weeklyInsightEl.textContent = pickWeeklyInsight();
-        weeklyInsightEl.classList.remove("weekly-insight--summary");
-      }
+      weeklyInsightEl.textContent = pickWeeklyInsight();
     }
     if (reportBody) {
       reportBody.textContent = body;
     }
     showScreen("report");
+    runWeeklyGlimpsePoem();
   }
 
   form.addEventListener("submit", function (e) {

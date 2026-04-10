@@ -625,6 +625,37 @@ body {
   }
 }
 
+.report-quote-label {
+  margin: 0 0 0.35rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  text-align: center;
+}
+
+.report-glimpse-label {
+  margin: 0.75rem 0 0.35rem;
+}
+
+.report-glimpse {
+  margin: 0 0 1rem;
+  padding: 1rem 1.1rem;
+  font-family: inherit;
+  font-size: 0.95rem;
+  font-weight: 500;
+  line-height: 1.85;
+  text-align: center;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  max-height: min(42vh, 22rem);
+  overflow: auto;
+}
+
 .report-body {
   margin: 0 0 0.75rem;
   padding: 1rem 1.1rem;
@@ -653,15 +684,6 @@ body {
   border: 1px solid rgba(201, 162, 39, 0.25);
   border-radius: var(--radius);
   box-shadow: 0 16px 36px rgba(0, 0, 0, 0.28);
-}
-
-/** 本周汇报页：底部总结句（由 weekgen 生成），加大加粗 */
-.weekly-insight.weekly-insight--summary {
-  font-size: clamp(1.35rem, 5.2vw, 1.95rem);
-  font-weight: 800;
-  line-height: 1.45;
-  letter-spacing: 0.02em;
-  padding: 1.1rem 1.15rem;
 }
 
 .choice-hint {

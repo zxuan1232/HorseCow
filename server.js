@@ -141,10 +141,16 @@ async function callGemini(apiKey, model, prompt, maxOutputTokens) {
   }
 }
 
-async function callOpenAICompatible(baseUrl, apiKey, model, prompt, maxTokens) {
+const SYSTEM_JSON_SEGMENTS =
+  "只输出合法 JSON：segments 数组；plain 含 story、deltaAnger、deltaFatigue（±1 或 ±2，恰好一轴非零，以 ±1 为主）；choice 另含 choiceA、choiceB、outcomeA、outcomeB、effectA、effectB（同上）。story/outcome 须以第二人称「你」叙述。简体中文。";
+const SYSTEM_PLAIN_TEXT =
+  "只输出用户任务要求的正文：简体中文；不要代码块与 markdown 围栏；不要 JSON；不要任何前言、标题或括号说明。";
+
+async function callOpenAICompatible(baseUrl, apiKey, model, prompt, maxTokens, usePlainSystem) {
   const mt = typeof maxTokens === "number" ? maxTokens : 1024;
   const base = baseUrl.replace(/\/?$/, "");
   const url = base + "/chat/completions";
+  const systemContent = usePlainSystem ? SYSTEM_PLAIN_TEXT : SYSTEM_JSON_SEGMENTS;
   const res = await fetch(url, {
     method: "POST",
     headers: {
@@ -156,8 +162,7 @@ async function callOpenAICompatible(baseUrl, apiKey, model, prompt, maxTokens) {
       messages: [
         {
           role: "system",
-          content:
-            "只输出合法 JSON：segments 数组；plain 含 story、deltaAnger、deltaFatigue（±1 或 ±2，恰好一轴非零，以 ±1 为主）；choice 另含 choiceA、choiceB、outcomeA、outcomeB、effectA、effectB（同上）。story/outcome 须以第二人称「你」叙述。简体中文。",
+          content: systemContent,
         },
         { role: "user", content: prompt },
       ],
@@ -256,6 +261,7 @@ app.post("/api/game-ai/chat", async function (req, res) {
       4096,
       Math.max(256, typeof maxRaw === "number" && !Number.isNaN(maxRaw) ? maxRaw : 1024),
     );
+    const usePlainSystem = body.outputKind === "plainText";
 
     const provider = (process.env.AI_PROVIDER || "bailian").toLowerCase();
     let text;
@@ -271,16 +277,20 @@ app.post("/api/game-ai/chat", async function (req, res) {
         process.env.OPENAI_MODEL || "llama-3.3-70b-versatile",
         prompt,
         mo,
+        usePlainSystem,
       );
     } else if (provider === "gemini") {
       const key = process.env.GEMINI_API_KEY;
       if (!key || !key.trim()) {
         return res.status(500).json({ ok: false, error: "服务器未配置 GEMINI_API_KEY" });
       }
+      const geminiPrompt = usePlainSystem
+        ? SYSTEM_PLAIN_TEXT + "\n\n" + prompt
+        : prompt;
       text = await callGemini(
         key,
         process.env.GEMINI_MODEL || "gemini-2.5-flash-lite",
-        prompt,
+        geminiPrompt,
         mo,
       );
     } else if (provider === "bailian" || provider === "dashscope") {
@@ -304,7 +314,7 @@ app.post("/api/game-ai/chat", async function (req, res) {
             "服务器未配置 DASHSCOPE_API_KEY（阿里云百炼 / DashScope 控制台 API-KEY，也可用 BAILIAN_API_KEY）",
         });
       }
-      text = await callOpenAICompatible(baseUrl, key, model, prompt, mo);
+      text = await callOpenAICompatible(baseUrl, key, model, prompt, mo, usePlainSystem);
     } else {
       const key = process.env.ARK_API_KEY;
       const endpointId = (process.env.ARK_ENDPOINT_ID || process.env.ARK_MODEL || "").trim();
@@ -321,7 +331,7 @@ app.post("/api/game-ai/chat", async function (req, res) {
             "服务器未配置 ARK_ENDPOINT_ID（方舟控制台「在线推理」接入点 ID，一般为 ep- 开头）",
         });
       }
-      text = await callOpenAICompatible(baseUrl, key.trim(), endpointId, prompt, mo);
+      text = await callOpenAICompatible(baseUrl, key.trim(), endpointId, prompt, mo, usePlainSystem);
     }
 
     return res.json({ ok: true, text: text });

@@ -453,10 +453,16 @@
     return tryOnce();
   }
 
-  function callOpenAICompatible(baseUrl, apiKey, model, prompt, maxTokens) {
+  var SYSTEM_JSON_SEGMENTS =
+    "只输出合法 JSON：segments 数组；plain 含 story、deltaAnger、deltaFatigue（±1 或 ±2，恰好一轴非零，以 ±1 为主）；choice 另含 choiceA、choiceB、outcomeA、outcomeB、effectA、effectB（同上）。story/outcome 须以第二人称「你」叙述。简体中文。";
+  var SYSTEM_PLAIN_TEXT =
+    "只输出用户任务要求的正文：简体中文；不要代码块与 markdown 围栏；不要 JSON；不要任何前言、标题或括号说明。";
+
+  function callOpenAICompatible(baseUrl, apiKey, model, prompt, maxTokens, usePlainSystem) {
     var mt = typeof maxTokens === "number" ? maxTokens : 1024;
     var base = baseUrl.replace(/\/?$/, "");
     var url = base + "/chat/completions";
+    var sys = usePlainSystem ? SYSTEM_PLAIN_TEXT : SYSTEM_JSON_SEGMENTS;
     return fetch(url, {
       method: "POST",
       headers: {
@@ -468,8 +474,7 @@
         messages: [
           {
             role: "system",
-            content:
-              "只输出合法 JSON：segments 数组；plain 含 story、deltaAnger、deltaFatigue（±1 或 ±2，恰好一轴非零，以 ±1 为主）；choice 另含 choiceA、choiceB、outcomeA、outcomeB、effectA、effectB（同上）。story/outcome 须以第二人称「你」叙述。简体中文。",
+            content: sys,
           },
           { role: "user", content: prompt },
         ],
@@ -497,7 +502,7 @@
   /**
    * 通过同源或配置的完整 URL 调用服务端 /api/game-ai/chat，不在浏览器携带模型密钥。
    */
-  function callViaServerProxy(prompt, maxOutputTokens, s) {
+  function callViaServerProxy(prompt, maxOutputTokens, s, outputKind) {
     var pathOrUrl = s.serverChatPath || "/api/game-ai/chat";
     var url =
       pathOrUrl.indexOf("http://") === 0 || pathOrUrl.indexOf("https://") === 0
@@ -507,13 +512,15 @@
     if (s.proxySecret && String(s.proxySecret).trim()) {
       headers["x-game-ai-secret"] = String(s.proxySecret).trim();
     }
+    var payload = {
+      prompt: prompt,
+      maxOutputTokens: maxOutputTokens,
+    };
+    if (outputKind === "plainText") payload.outputKind = "plainText";
     return fetch(url, {
       method: "POST",
       headers: headers,
-      body: JSON.stringify({
-        prompt: prompt,
-        maxOutputTokens: maxOutputTokens,
-      }),
+      body: JSON.stringify(payload),
     }).then(function (res) {
       return res.json().then(function (data) {
         if (!res.ok || !data || data.ok !== true) {
@@ -592,10 +599,69 @@
     });
   }
 
+  function sanitizeWeeklyPoemText(raw) {
+    var s = String(raw || "").trim();
+    var fence = s.match(/```(?:\w*)?\s*([\s\S]*?)```/);
+    if (fence) s = fence[1].trim();
+    if (s.length > 1400) s = s.slice(0, 1400) + "…";
+    return s || "";
+  }
+
+  /**
+   * 根据本周经历摘要生成「本周掠影」短诗（纯文本，非 JSON）。
+   */
+  function generateWeeklyGlimpsePoem(player, contextText) {
+    var ctx = String(contextText || "").trim();
+    if (!ctx) return Promise.reject(new Error("无本周摘要"));
+    var lines = [
+      "你是《牛马的一周》周报诗人。请**只根据**下方「本周经历摘要」写一首短诗，用于「本周掠影」栏目。",
+      "要求：",
+      "· 共 8～14 行为宜；现代诗或仿古体（如七言截句、词味、乐府感）均可；",
+      "· 必须用第二人称「你」，与摘要中的情绪、场景呼应；",
+      "· 不要标题、不要括号说明、不要 markdown；**只输出诗正文**，每行一句，行末可押韵可不押。",
+      "· 禁止修仙玄幻；保持现实职场/行业日常气质。",
+      "",
+      "【本周经历摘要】",
+      ctx,
+    ];
+    var prompt = lines.join("\n");
+    var s = loadSettings();
+    if (!s.useServerProxy && (!s.apiKey || !s.apiKey.trim())) {
+      return Promise.reject(new Error("未配置 API Key"));
+    }
+    var maxTok = Math.min(1024, 420);
+    var chain;
+    if (s.useServerProxy) {
+      chain = callViaServerProxy(prompt, maxTok, s, "plainText");
+    } else if (s.provider === "openai") {
+      chain = callOpenAICompatible(
+        s.baseUrl,
+        s.apiKey,
+        s.openaiModel || "llama-3.3-70b-versatile",
+        prompt,
+        maxTok,
+        true,
+      );
+    } else {
+      chain = callGemini(
+        s.apiKey,
+        s.model || "gemini-2.5-flash-lite",
+        SYSTEM_PLAIN_TEXT + "\n\n" + prompt,
+        maxTok,
+      );
+    }
+    return chain.then(function (raw) {
+      var t = sanitizeWeeklyPoemText(raw);
+      if (!t) throw new Error("模型返回空诗稿");
+      return t;
+    });
+  }
+
   global.AIClient = {
     defaultSettings: defaultSettings,
     loadSettings: loadSettings,
     isAiReady: isAiReady,
     generateDayBatch: generateDayBatch,
+    generateWeeklyGlimpsePoem: generateWeeklyGlimpsePoem,
   };
 })(typeof window !== "undefined" ? window : globalThis);

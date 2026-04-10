@@ -896,10 +896,72 @@
     return { days, seed, dayLabels: DAY_LABELS };
   }
 
-  function buildWeeklyReport(profile, daysData, extra) {
+  /**
+   * 供 AI 写「本周掠影」短诗：压缩本周事件与选择，过长截尾部保留近期。
+   */
+  function buildWeeklyGlimpseContext(profile, daysData, extra) {
     extra = extra || {};
     const kw = getKw(profile.industry);
     const total = daysData.days.reduce((a, b) => a + (b ? b.length : 0), 0);
+    const lines = [];
+    lines.push(
+      `角色：${profile.name} · ${profile.gender} · ${profile.age} 岁 · ${profile.industry}`,
+    );
+    lines.push(
+      `行业意象：场景「${kw.scene}」；工具/事务「${kw.tool}」；插曲「${kw.crisis}」`,
+    );
+    lines.push(`本周经历段数合计约 ${total}。`);
+    lines.push("");
+    daysData.dayLabels.forEach((label, i) => {
+      const evs = daysData.days[i];
+      if (!evs || !evs.length) return;
+      evs.forEach((story, j) => {
+        const t = String(story || "")
+          .replace(/\s+/g, " ")
+          .trim()
+          .slice(0, 140);
+        if (t) lines.push(`「${label}」第${j + 1}段：${t}`);
+      });
+    });
+    if (extra.choiceLog && extra.choiceLog.length) {
+      lines.push("");
+      lines.push("玩家关键选择：");
+      extra.choiceLog.forEach((c) => {
+        lines.push(`· ${c.dayLabel} 第${c.segmentIndex + 1} 段后：选「${c.label}」`);
+      });
+    }
+    let text = lines.join("\n");
+    if (text.length > 3600) {
+      text = "…（更早经历省略）\n" + text.slice(-3600);
+    }
+    return text;
+  }
+
+  /** AI 不可用时本地押韵/排比回退 */
+  function generateLocalGlimpsePoem(profile, daysData, extra) {
+    const kw = getKw(profile.industry);
+    const total = daysData.days.reduce((a, b) => a + (b ? b.length : 0), 0);
+    const seed = (hashProfile(profile) ^ total ^ 0xbeef5eed) >>> 0;
+    const rnd = mulberry32(seed);
+    const pool = [
+      `你在「${kw.scene}」来回折返，\n` +
+        `${total} 段日子像未读红点，\n` +
+        `${kw.tool} 与 ${kw.crisis}，各领一半心烦。`,
+      `闹钟与键盘合谋，\n` +
+        `把周一到周日串成一根线，\n` +
+        `你在「${kw.scene}」打结，又自己解开。`,
+      `有人把活丢成抛物线，\n` +
+        `你在「${kw.scene}」里接球，\n` +
+        `风从 ${kw.crisis} 那边吹来，衣角全是待办。`,
+      `本周像一卷过期的胶带，\n` +
+        `越撕越黏的是「${profile.industry}」日常，\n` +
+        `你仍把下一格日历，贴得端正。`,
+    ];
+    return pool[Math.floor(rnd() * pool.length)];
+  }
+
+  function buildWeeklyReport(profile, daysData, extra) {
+    extra = extra || {};
     const lines = [];
     lines.push(
       `${profile.name}（${profile.gender}，${profile.age} 岁 · ${profile.industry}）`,
@@ -919,17 +981,7 @@
       lines.push("· （未记录属性）");
     }
     lines.push("");
-    lines.push("【本周掠影】");
-    lines.push(`· 七天下来约 ${total} 段经历，多半发生在「${kw.scene}」一带。`);
-    lines.push("");
-    const closings = [
-      "总结：牛马虽累，班还是要上；下周继续对齐颗粒度。",
-      "汇报完毕。建议：多喝水，少生气，工资到账那一刻一切都是值得的。",
-      "本周 KPI：活着。恭喜超额完成。",
-    ];
-    const idx = Math.abs(hashProfile(profile) + total) % closings.length;
-    const closing = closings[idx];
-    return { body: lines.join("\n"), closing };
+    return { body: lines.join("\n") };
   }
 
   global.WeekGen = {
@@ -937,6 +989,8 @@
     generateWeek,
     generateLocalDayBatch,
     buildWeeklyReport,
+    buildWeeklyGlimpseContext,
+    generateLocalGlimpsePoem,
     hashProfile,
   };
 })(typeof window !== "undefined" ? window : globalThis);
