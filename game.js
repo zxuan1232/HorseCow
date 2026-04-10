@@ -928,18 +928,38 @@
 
     var line = applyAngerFatigueFromDeltas(da, df);
     weekStatsEl.textContent = formatStatsLine(player);
-    pendingPlainEnding = null;
-    if (player.anger >= STAT_MAX) {
-      pendingPlainEnding = "rage";
-    } else if (player.fatigue >= STAT_MAX) {
-      pendingPlainEnding = "fatigue";
-    }
-    aiFeedbackState = line
-      ? { text: "【属性变化】" + line }
-      : { text: null };
+    var choiceEnding =
+      player.anger >= STAT_MAX ? "rage" : player.fatigue >= STAT_MAX ? "fatigue" : null;
+
     pendingChoices = null;
     pendingSegmentKind = null;
     setChoiceUiVisible(false);
+
+    if (choiceEnding === "rage") {
+      pendingPlainEnding = null;
+      aiFeedbackState = null;
+      if (eventStatFeedback) {
+        eventStatFeedback.hidden = true;
+        eventStatFeedback.textContent = "";
+      }
+      enterEndingRageScreen();
+      return;
+    }
+    if (choiceEnding === "fatigue") {
+      pendingPlainEnding = null;
+      aiFeedbackState = null;
+      if (eventStatFeedback) {
+        eventStatFeedback.hidden = true;
+        eventStatFeedback.textContent = "";
+      }
+      enterEndingFatigueScreen();
+      return;
+    }
+
+    pendingPlainEnding = null;
+    aiFeedbackState = line
+      ? { text: "【属性变化】" + line }
+      : { text: null };
     renderAiEventDisplay();
   }
 
