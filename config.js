@@ -1,17 +1,13 @@
 /**
- * 发行者专用：玩家界面不会看到这些选项。
- *
- * 【仅 Gemini】保持 provider: "gemini"，填写 apiKey（Google AI Studio 免费 Key 即可）。
- * 默认 model 为官方文档中的「最省成本 / 适合高频」型号，一般免费层可用：
- *   gemini-2.5-flash-lite（默认）
- * 若不可用可改为：gemini-2.5-flash、gemini-flash-latest（以官方模型列表为准）
- *
- * 【baseUrl / openaiModel】仅在 provider 改为 "openai"（Groq 等）时使用；用 Gemini 时可忽略。
- *
- * enabled: true 且 apiKey 非空 → 走 AI；否则本地模板。
+ * 前端配置：不要在这里写 GEMINI 等 API Key。
+ * Key 只放在部署平台的环境变量（如 Render 里的 GEMINI_API_KEY），见 DEPLOY.md。
  */
 window.GAME_AI_CONFIG = {
   enabled: true,
+  useServerProxy: true,
+  serverChatPath: "/api/game-ai/chat",
+  proxySecret: "",
+
   provider: "gemini",
   apiKey: "",
   model: "gemini-2.5-flash-lite",

@@ -1,11 +1,17 @@
 /**
- * 浏览器端调用 AI。配置仅通过项目内 config.js 的 window.GAME_AI_CONFIG（由发行者填写）。
- * Gemini、OpenAI 兼容（Groq、Together、本地 Ollama 等）。
+ * 浏览器端：构建提示词与解析 JSON；实际调用模型可走「服务端代理」（推荐，密钥不上屏）
+ * 或浏览器直连（需 config 里 apiKey，易触发平台泄露警告）。
+ * 配置见 config.js 的 window.GAME_AI_CONFIG。
  */
 (function (global) {
   function defaultSettings() {
     return {
       enabled: false,
+      /** true：POST 到 serverChatPath，由服务器读环境变量里的密钥 */
+      useServerProxy: true,
+      serverChatPath: "/api/game-ai/chat",
+      /** 与服务器 AI_PROXY_SECRET 一致时可拦简单盗刷；可留空 */
+      proxySecret: "",
       provider: "gemini",
       apiKey: "",
       model: "gemini-2.5-flash-lite",
@@ -20,8 +26,16 @@
     if (!c || typeof c !== "object") {
       return d;
     }
+    var usePx = c.useServerProxy;
+    if (usePx === undefined) {
+      usePx = d.useServerProxy;
+    }
     return {
       enabled: !!c.enabled,
+      useServerProxy: !!usePx,
+      serverChatPath:
+        (c.serverChatPath && String(c.serverChatPath).trim()) || d.serverChatPath,
+      proxySecret: typeof c.proxySecret === "string" ? c.proxySecret : "",
       provider: c.provider === "openai" ? "openai" : "gemini",
       apiKey: typeof c.apiKey === "string" ? c.apiKey : "",
       model: (c.model && String(c.model).trim()) || d.model,
@@ -32,8 +46,9 @@
 
   function isAiReady() {
     var s = loadSettings();
-    if (!s.enabled || !s.apiKey || !s.apiKey.trim()) return false;
-    return true;
+    if (!s.enabled) return false;
+    if (s.useServerProxy) return true;
+    return !!(s.apiKey && s.apiKey.trim());
   }
 
   function trimToJsonObject(text) {
@@ -433,12 +448,47 @@
   }
 
   /**
+   * 通过同源或配置的完整 URL 调用服务端 /api/game-ai/chat，不在浏览器携带模型密钥。
+   */
+  function callViaServerProxy(prompt, maxOutputTokens, s) {
+    var pathOrUrl = s.serverChatPath || "/api/game-ai/chat";
+    var url =
+      pathOrUrl.indexOf("http://") === 0 || pathOrUrl.indexOf("https://") === 0
+        ? pathOrUrl
+        : pathOrUrl;
+    var headers = { "Content-Type": "application/json" };
+    if (s.proxySecret && String(s.proxySecret).trim()) {
+      headers["x-game-ai-secret"] = String(s.proxySecret).trim();
+    }
+    return fetch(url, {
+      method: "POST",
+      headers: headers,
+      body: JSON.stringify({
+        prompt: prompt,
+        maxOutputTokens: maxOutputTokens,
+      }),
+    }).then(function (res) {
+      return res.json().then(function (data) {
+        if (!res.ok || !data || data.ok !== true) {
+          throw new Error(
+            (data && data.error) || res.statusText || "AI 代理请求失败",
+          );
+        }
+        if (typeof data.text !== "string" || !data.text) {
+          throw new Error("AI 代理返回空内容");
+        }
+        return data.text;
+      });
+    });
+  }
+
+  /**
    * 一次性生成本日全部事件（segments 顺序 = 当天从早到晚），再由前端逐条展示。
    */
   function generateDayBatch(player, weekData, choiceLog, dayIndex, eventCount, plainCount) {
     var s = loadSettings();
-    if (!s.apiKey || !s.apiKey.trim()) {
-      return Promise.reject(new Error("未配置 API Key"));
+    if (!s.useServerProxy && (!s.apiKey || !s.apiKey.trim())) {
+      return Promise.reject(new Error("未配置 API Key，或请开启 useServerProxy 使用服务端密钥"));
     }
 
     var k =
@@ -467,7 +517,9 @@
     var maxTok = Math.min(4096, 800 + eventCount * 420);
 
     var chain;
-    if (s.provider === "openai") {
+    if (s.useServerProxy) {
+      chain = callViaServerProxy(prompt, maxTok, s);
+    } else if (s.provider === "openai") {
       chain = callOpenAICompatible(
         s.baseUrl,
         s.apiKey,

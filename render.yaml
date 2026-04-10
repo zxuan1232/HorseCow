@@ -1,0 +1,13 @@
+# Render：Dashboard → New → Blueprint → 选含本文件的 GitHub 仓库
+# 部署时在界面里填写 GEMINI_API_KEY（不会进仓库）
+services:
+  - type: web
+    name: horse-cow-career
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/game-ai/health
+    envVars:
+      - key: GEMINI_API_KEY
+        sync: false

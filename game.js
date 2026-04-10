@@ -132,10 +132,23 @@
     dayTransitionOverlay.classList.remove("day-transition--open");
   }
 
+  function usesServerAiProxy() {
+    try {
+      var s = window.AIClient && window.AIClient.loadSettings
+        ? window.AIClient.loadSettings()
+        : null;
+      return !!(s && s.useServerProxy);
+    } catch (e) {
+      return true;
+    }
+  }
+
   function updateProfileModeHint() {
     if (!profileModeHint) return;
     if (window.AIClient && window.AIClient.isAiReady()) {
-      profileModeHint.textContent = "【调试】进入本周后将使用：AI 生成";
+      profileModeHint.textContent = usesServerAiProxy()
+        ? "【调试】进入本周后将使用：AI（服务端代理）"
+        : "【调试】进入本周后将使用：AI（浏览器直连）";
     } else {
       profileModeHint.textContent = "【调试】进入本周后将使用：本地模板";
     }
@@ -143,9 +156,13 @@
 
   function setWeekModeBadge(isAi) {
     if (!modeSourceBadge) return;
-    modeSourceBadge.textContent = isAi
-      ? "【调试】本局：AI 生成"
-      : "【调试】本局：本地模板";
+    if (!isAi) {
+      modeSourceBadge.textContent = "【调试】本局：本地模板";
+      return;
+    }
+    modeSourceBadge.textContent = usesServerAiProxy()
+      ? "【调试】本局：AI（服务端）"
+      : "【调试】本局：AI（浏览器直连）";
   }
 
   var STAT_MAX = 10;
