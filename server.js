@@ -1,13 +1,61 @@
 /**
- * 本地 / 云部署：托管静态文件 + 将 AI 请求转发到 Gemini 或 OpenAI 兼容接口。
+ * 本地 / 云部署：托管静态文件 + 将 AI 请求转发到阿里云百炼（DashScope OpenAI 兼容）/ 火山方舟 / Gemini / OpenAI 兼容接口。
  * 密钥只放在环境变量（或平台「Environment」配置）中，不写进前端。
  */
-require("dotenv").config();
-
 const path = require("path");
+const envPath = path.join(__dirname, ".env");
+require("dotenv").config({ path: envPath });
+
 const express = require("express");
 
+(function logAiKeyHint() {
+  var prov = (process.env.AI_PROVIDER || "bailian").toLowerCase();
+  if (prov === "openai") {
+    if (!process.env.OPENAI_API_KEY || !String(process.env.OPENAI_API_KEY).trim()) {
+      console.warn("[HorseCow] 未读取到 OPENAI_API_KEY，已从文件加载:", envPath);
+    }
+  } else if (prov === "gemini") {
+    if (!process.env.GEMINI_API_KEY || !String(process.env.GEMINI_API_KEY).trim()) {
+      console.warn("[HorseCow] 未读取到 GEMINI_API_KEY，已从文件加载:", envPath);
+    }
+  } else if (prov === "bailian" || prov === "dashscope") {
+    var ds =
+      (process.env.DASHSCOPE_API_KEY && String(process.env.DASHSCOPE_API_KEY).trim()) ||
+      (process.env.BAILIAN_API_KEY && String(process.env.BAILIAN_API_KEY).trim());
+    if (!ds) {
+      console.warn(
+        "[HorseCow] 未读取到 DASHSCOPE_API_KEY（或 BAILIAN_API_KEY），百炼密钥见控制台，已从文件加载:",
+        envPath,
+      );
+    }
+  } else if (prov === "ark" || prov === "volcengine") {
+    if (!process.env.ARK_API_KEY || !String(process.env.ARK_API_KEY).trim()) {
+      console.warn("[HorseCow] 未读取到 ARK_API_KEY，已从文件加载:", envPath);
+    }
+    var ep = process.env.ARK_ENDPOINT_ID || process.env.ARK_MODEL;
+    if (!ep || !String(ep).trim()) {
+      console.warn("[HorseCow] 未读取到 ARK_ENDPOINT_ID（方舟接入点 ID，形如 ep-xxxx），已从文件加载:", envPath);
+    }
+  }
+})();
+
 const MAX_PROMPT_CHARS = 150000;
+
+/** 把 undici「fetch failed」等转成可操作的说明（常见于大陆无法直连 Google） */
+function formatUpstreamError(err) {
+  if (!err) return "未知错误";
+  var msg = String(err.message || err);
+  var code = err.cause && err.cause.code ? String(err.cause.code) : "";
+  if (/fetch failed/i.test(msg) || code === "ENOTFOUND" || code === "ECONNRESET" || code === "ETIMEDOUT" || code === "EAI_AGAIN") {
+    var tail = code ? "（" + code + "）" : "";
+    return (
+      "连不上模型接口 " +
+      tail +
+      "。请检查网络、代理与 .env 中 AI_PROVIDER（bailian / ark / openai / gemini）及对应密钥、模型配置。"
+    );
+  }
+  return msg;
+}
 
 function delay(ms) {
   return new Promise(function (resolve) {
@@ -109,7 +157,7 @@ async function callOpenAICompatible(baseUrl, apiKey, model, prompt, maxTokens) {
         {
           role: "system",
           content:
-            "只输出合法 JSON：segments 数组；plain 含 story(建议充实、总长≤200字符)、deltaAnger、deltaFatigue；choice 另含 choiceA、choiceB、effectA、effectB（各含 deltaAnger、deltaFatigue）。简体中文。",
+            "只输出合法 JSON：segments 数组；plain 含 story(建议充实、总长≤320字符)、deltaAnger、deltaFatigue（怒气与疲劳恰好一轴非零）；choice 另含 choiceA、choiceB、effectA、effectB（每个 effect 同样一轴非零）。简体中文。",
         },
         { role: "user", content: prompt },
       ],
@@ -161,12 +209,26 @@ app.use(corsMiddleware);
 app.use(express.json({ limit: "2mb" }));
 
 app.get("/api/game-ai/health", function (req, res) {
-  const provider = (process.env.AI_PROVIDER || "gemini").toLowerCase();
+  const provider = (process.env.AI_PROVIDER || "bailian").toLowerCase();
   let configured = false;
   if (provider === "openai") {
     configured = !!(process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY.trim());
-  } else {
+  } else if (provider === "gemini") {
     configured = !!(process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.trim());
+  } else if (provider === "bailian" || provider === "dashscope") {
+    const k =
+      (process.env.DASHSCOPE_API_KEY && process.env.DASHSCOPE_API_KEY.trim()) ||
+      (process.env.BAILIAN_API_KEY && process.env.BAILIAN_API_KEY.trim());
+    configured = !!k;
+  } else if (provider === "ark" || provider === "volcengine") {
+    configured = !!(
+      process.env.ARK_API_KEY &&
+      process.env.ARK_API_KEY.trim() &&
+      (process.env.ARK_ENDPOINT_ID || process.env.ARK_MODEL) &&
+      String(process.env.ARK_ENDPOINT_ID || process.env.ARK_MODEL).trim()
+    );
+  } else {
+    configured = false;
   }
   res.json({ ok: true, aiConfigured: configured, provider: provider });
 });
@@ -195,7 +257,7 @@ app.post("/api/game-ai/chat", async function (req, res) {
       Math.max(256, typeof maxRaw === "number" && !Number.isNaN(maxRaw) ? maxRaw : 1024),
     );
 
-    const provider = (process.env.AI_PROVIDER || "gemini").toLowerCase();
+    const provider = (process.env.AI_PROVIDER || "bailian").toLowerCase();
     let text;
 
     if (provider === "openai") {
@@ -210,7 +272,7 @@ app.post("/api/game-ai/chat", async function (req, res) {
         prompt,
         mo,
       );
-    } else {
+    } else if (provider === "gemini") {
       const key = process.env.GEMINI_API_KEY;
       if (!key || !key.trim()) {
         return res.status(500).json({ ok: false, error: "服务器未配置 GEMINI_API_KEY" });
@@ -221,6 +283,45 @@ app.post("/api/game-ai/chat", async function (req, res) {
         prompt,
         mo,
       );
+    } else if (provider === "bailian" || provider === "dashscope") {
+      const key = (
+        (process.env.DASHSCOPE_API_KEY && process.env.DASHSCOPE_API_KEY.trim()) ||
+        (process.env.BAILIAN_API_KEY && process.env.BAILIAN_API_KEY.trim()) ||
+        ""
+      );
+      const baseUrl =
+        (process.env.DASHSCOPE_BASE_URL && process.env.DASHSCOPE_BASE_URL.trim()) ||
+        (process.env.BAILIAN_BASE_URL && process.env.BAILIAN_BASE_URL.trim()) ||
+        "https://dashscope.aliyuncs.com/compatible-mode/v1";
+      const model =
+        (process.env.DASHSCOPE_MODEL && process.env.DASHSCOPE_MODEL.trim()) ||
+        (process.env.BAILIAN_MODEL && process.env.BAILIAN_MODEL.trim()) ||
+        "qwen-plus";
+      if (!key) {
+        return res.status(500).json({
+          ok: false,
+          error:
+            "服务器未配置 DASHSCOPE_API_KEY（阿里云百炼 / DashScope 控制台 API-KEY，也可用 BAILIAN_API_KEY）",
+        });
+      }
+      text = await callOpenAICompatible(baseUrl, key, model, prompt, mo);
+    } else {
+      const key = process.env.ARK_API_KEY;
+      const endpointId = (process.env.ARK_ENDPOINT_ID || process.env.ARK_MODEL || "").trim();
+      const baseUrl =
+        (process.env.ARK_BASE_URL && process.env.ARK_BASE_URL.trim()) ||
+        "https://ark.cn-beijing.volces.com/api/v3";
+      if (!key || !key.trim()) {
+        return res.status(500).json({ ok: false, error: "服务器未配置 ARK_API_KEY（火山方舟 API Key）" });
+      }
+      if (!endpointId) {
+        return res.status(500).json({
+          ok: false,
+          error:
+            "服务器未配置 ARK_ENDPOINT_ID（方舟控制台「在线推理」接入点 ID，一般为 ep- 开头）",
+        });
+      }
+      text = await callOpenAICompatible(baseUrl, key.trim(), endpointId, prompt, mo);
     }
 
     return res.json({ ok: true, text: text });
@@ -228,7 +329,7 @@ app.post("/api/game-ai/chat", async function (req, res) {
     console.error("[game-ai/chat]", e);
     return res.status(502).json({
       ok: false,
-      error: e && e.message ? e.message : String(e),
+      error: formatUpstreamError(e),
     });
   }
 });
@@ -249,5 +350,5 @@ app.use(function (req, res, next) {
 const PORT = parseInt(process.env.PORT || "3000", 10);
 app.listen(PORT, function () {
   console.log("HorseCow 服务已启动: http://localhost:" + PORT);
-  console.log("AI 提供方: " + (process.env.AI_PROVIDER || "gemini"));
+  console.log("AI 提供方: " + (process.env.AI_PROVIDER || "bailian"));
 });

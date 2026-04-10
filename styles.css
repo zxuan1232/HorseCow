@@ -527,6 +527,19 @@ body {
   box-shadow: var(--shadow);
 }
 
+/* AI 按天拉取事件时隐藏本周 UI，避免透过过渡层看到「生成中」或上一段内容 */
+#screen-week.week-screen--ai-loading .week-head,
+#screen-week.week-screen--ai-loading .week-tabs,
+#screen-week.week-screen--ai-loading .event-panel,
+#screen-week.week-screen--ai-loading .event-stat-feedback,
+#screen-week.week-screen--ai-loading .choice-hint,
+#screen-week.week-screen--ai-loading .choice-row,
+#screen-week.week-screen--ai-loading #btn-event-next {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
 .event-stat-feedback {
   margin: 0 0 0.75rem;
   padding: 0.65rem 0.85rem;
@@ -546,14 +559,18 @@ body {
 .day-transition {
   position: fixed;
   inset: 0;
-  z-index: 200;
+  z-index: 500;
   display: flex;
   align-items: center;
   justify-content: center;
-  background:
-    radial-gradient(ellipse 85% 55% at 50% 35%, rgba(201, 162, 39, 0.08), transparent),
-    rgba(10, 12, 16, 0.94);
-  backdrop-filter: blur(6px);
+  background: linear-gradient(
+    165deg,
+    rgba(12, 14, 18, 0.99) 0%,
+    rgba(8, 10, 14, 0.995) 45%,
+    rgba(10, 12, 16, 1) 100%
+  );
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
   opacity: 0;
   visibility: hidden;
   pointer-events: none;

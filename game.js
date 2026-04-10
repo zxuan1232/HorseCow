@@ -132,37 +132,28 @@
     dayTransitionOverlay.classList.remove("day-transition--open");
   }
 
-  function usesServerAiProxy() {
-    try {
-      var s = window.AIClient && window.AIClient.loadSettings
-        ? window.AIClient.loadSettings()
-        : null;
-      return !!(s && s.useServerProxy);
-    } catch (e) {
-      return true;
-    }
-  }
-
   function updateProfileModeHint() {
     if (!profileModeHint) return;
     if (window.AIClient && window.AIClient.isAiReady()) {
-      profileModeHint.textContent = usesServerAiProxy()
-        ? "【调试】进入本周后将使用：AI（服务端代理）"
-        : "【调试】进入本周后将使用：AI（浏览器直连）";
+      profileModeHint.textContent =
+        "本周将优先由大模型（AI）生成每日事件；若请求失败会自动改为本地模板（非 AI）。";
     } else {
-      profileModeHint.textContent = "【调试】进入本周后将使用：本地模板";
+      profileModeHint.textContent = "本周事件由本地模板生成（非 AI）。";
     }
   }
 
-  function setWeekModeBadge(isAi) {
-    if (!modeSourceBadge) return;
-    if (!isAi) {
-      modeSourceBadge.textContent = "【调试】本局：本地模板";
-      return;
+  function isSegmentWeek() {
+    return weekData && (weekData.mode === "ai" || weekData.mode === "local");
+  }
+
+  /** 事件区上方：是否「本局实际由大模型生成」 */
+  function refreshWeekModeBadge() {
+    if (!modeSourceBadge || !weekData) return;
+    if (weekData.segmentsFromAi) {
+      modeSourceBadge.textContent = "本局事件：AI 生成";
+    } else {
+      modeSourceBadge.textContent = "本局事件：非 AI 生成";
     }
-    modeSourceBadge.textContent = usesServerAiProxy()
-      ? "【调试】本局：AI（服务端）"
-      : "【调试】本局：AI（浏览器直连）";
   }
 
   var STAT_MAX = 10;
@@ -176,8 +167,11 @@
   var pendingChoices = null;
   /** @type {null | 'choice' | 'plain'} */
   var pendingSegmentKind = null;
-  /** @type {null | { text: string }} */
+  /** @type {null | { text: string | null }} */
   var aiFeedbackState = null;
+  /** plain 段结算后已满怒/满疲劳时，先展示事件再点「继续」进结局 */
+  /** @type {null | 'rage' | 'fatigue'} */
+  var pendingPlainEnding = null;
   var aiLoading = false;
   var aiError = false;
   /** 各日由 AI 一次性生成的事件列表（顺序=当天从早到晚）；null 表示尚未拉取 */
@@ -210,12 +204,16 @@
     return formatDeltaLine(player.anger - beforeA, player.fatigue - beforeF);
   }
 
+  /** 只展示实际有变化的项；全无变化则返回空串 */
   function formatDeltaLine(dAnger, dFatigue) {
-    function one(n, label) {
-      if (n === 0) return label + "不变";
-      return label + (n > 0 ? "+" + n : String(n));
+    var parts = [];
+    if (dAnger !== 0) {
+      parts.push("怒气" + (dAnger > 0 ? "+" + dAnger : String(dAnger)));
     }
-    return one(dAnger, "怒气") + " · " + one(dFatigue, "疲劳");
+    if (dFatigue !== 0) {
+      parts.push("疲劳" + (dFatigue > 0 ? "+" + dFatigue : String(dFatigue)));
+    }
+    return parts.join(" · ");
   }
 
   function rollInitialStats() {
@@ -280,6 +278,12 @@
     });
   }
 
+  function setWeekAiLoadingUi(busy) {
+    if (screens.week) {
+      screens.week.classList.toggle("week-screen--ai-loading", !!busy);
+    }
+  }
+
   function resetEndingRageUi() {
     if (endingRageTypewriter) endingRageTypewriter.textContent = "";
     if (btnEndingRestart) btnEndingRestart.hidden = true;
@@ -290,13 +294,6 @@
     hideDayTransitionImmediate();
     resetEndingRageUi();
     showScreen("endingRage");
-  }
-
-  /** 怒气满（10）时进入结局1；返回 true 表示已切屏，调用方勿再渲染本周 UI */
-  function maybeTriggerAngerEnding() {
-    if (!player || player.anger < STAT_MAX) return false;
-    enterEndingRageScreen();
-    return true;
   }
 
   var fatigueEnding1Timer = null;
@@ -347,19 +344,12 @@
     startEndingFatigue1Sequence();
   }
 
-  /** 疲劳满（10）时进入结局2；怒气优先于疲劳 */
-  function maybeTriggerFatigueEnding() {
-    if (!player || player.fatigue < STAT_MAX) return false;
-    enterEndingFatigueScreen();
-    return true;
-  }
-
-  /** 抢救成功：进入下一天并继续 AI 周 */
+  /** 抢救成功：进入下一天并继续本周（AI/本地同流程） */
   function resumeWeekAfterFatigueSuccess() {
-    if (!player || !weekData || weekData.mode !== "ai") return;
+    if (!player || !weekData || !isSegmentWeek()) return;
     hideDayTransitionImmediate();
-    player.fatigue = randInt(2, 5);
-    player.anger = clampStat(player.anger - 1);
+    player.fatigue = 0;
+    player.anger = 0;
     weekStatsEl.textContent = formatStatsLine(player);
     if (currentDayIndex >= 6) {
       var reportText = window.WeekGen.buildWeeklyReport(player, weekData, {
@@ -373,7 +363,7 @@
     daySegmentCache[currentDayIndex] = null;
     weekData.days[currentDayIndex] = [];
     showScreen("week");
-    loadAiSegment();
+    loadWeekSegment();
   }
 
   function runEndingRageTypewriter() {
@@ -530,32 +520,42 @@
   function startLocalWeek() {
     if (!player || !window.WeekGen) return;
     weekSeedExtra = (Date.now() & 0xffffffff) >>> 0;
-    weekData = window.WeekGen.generateWeek(player, weekSeedExtra);
-    weekData.mode = "local";
-    dayEventCounts = [];
+    weekData = {
+      mode: "local",
+      dayLabels: window.WeekGen.DAY_LABELS.slice(),
+      days: [[], [], [], [], [], [], []],
+      seed: (window.WeekGen.hashProfile(player) ^ weekSeedExtra) >>> 0,
+      fallbackFromAi: false,
+      segmentsFromAi: false,
+    };
+    dayEventCounts = Array.from({ length: 7 }, function () {
+      return randInt(4, 8);
+    });
     choiceLog = [];
     pendingChoices = null;
     pendingSegmentKind = null;
+    pendingPlainEnding = null;
     aiFeedbackState = null;
     aiLoading = false;
     aiError = false;
     currentDayIndex = 0;
     currentEventIndex = 0;
+    daySegmentCache = [null, null, null, null, null, null, null];
     weekPlayerLine.textContent =
       player.name + " · " + player.industry + " · " + player.age + " 岁";
     weekStatsEl.textContent = formatStatsLine(player);
     setChoiceUiVisible(false);
-    btnEventNext.hidden = false;
+    btnEventNext.hidden = true;
     btnEventNext.disabled = false;
-    if (eventProgress) eventProgress.hidden = false;
+    if (eventProgress) eventProgress.hidden = true;
     if (eventStatFeedback) {
       eventStatFeedback.hidden = true;
       eventStatFeedback.textContent = "";
     }
     renderWeekTabs();
-    renderCurrentEvent();
-    setWeekModeBadge(false);
+    refreshWeekModeBadge();
     showScreen("week");
+    loadWeekSegment();
   }
 
   function startAiWeek() {
@@ -565,6 +565,8 @@
       dayLabels: window.WeekGen.DAY_LABELS.slice(),
       days: [[], [], [], [], [], [], []],
       seed: Date.now(),
+      fallbackFromAi: false,
+      segmentsFromAi: true,
     };
     dayEventCounts = Array.from({ length: 7 }, function () {
       return randInt(4, 8);
@@ -572,6 +574,7 @@
     choiceLog = [];
     pendingChoices = null;
     pendingSegmentKind = null;
+    pendingPlainEnding = null;
     aiFeedbackState = null;
     aiLoading = false;
     aiError = false;
@@ -589,9 +592,9 @@
       eventStatFeedback.textContent = "";
     }
     renderWeekTabs();
-    setWeekModeBadge(true);
+    refreshWeekModeBadge();
     showScreen("week");
-    loadAiSegment();
+    loadWeekSegment();
   }
 
   btnStartWeek.addEventListener("click", function () {
@@ -618,6 +621,7 @@
 
   function applyAiSegmentResult(seg) {
     if (!seg) return false;
+    pendingPlainEnding = null;
     aiFeedbackState = null;
     if (eventStatFeedback) {
       eventStatFeedback.hidden = true;
@@ -633,16 +637,23 @@
     pendingChoices = null;
     var line = applyAngerFatigueFromDeltas(seg.deltaAnger, seg.deltaFatigue);
     weekStatsEl.textContent = formatStatsLine(player);
-    if (maybeTriggerAngerEnding()) return true;
-    if (maybeTriggerFatigueEnding()) return true;
-    aiFeedbackState = { text: "【属性变化】" + line };
+    if (player.anger >= STAT_MAX) {
+      pendingPlainEnding = "rage";
+    } else if (player.fatigue >= STAT_MAX) {
+      pendingPlainEnding = "fatigue";
+    }
+    aiFeedbackState = line
+      ? { text: "【属性变化】" + line }
+      : { text: null };
     btnEventNext.hidden = false;
     btnEventNext.textContent = "继续";
     return false;
   }
 
-  function loadAiSegment() {
-    if (!player || !weekData || weekData.mode !== "ai" || !window.AIClient) return;
+  function loadWeekSegment() {
+    if (!player || !weekData || !isSegmentWeek()) return;
+
+    setWeekAiLoadingUi(false);
 
     aiFeedbackState = null;
     if (eventStatFeedback) {
@@ -676,6 +687,7 @@
 
     showDayTransitionForDay(d);
 
+    setWeekAiLoadingUi(true);
     aiLoading = true;
     aiError = false;
     pendingChoices = null;
@@ -688,10 +700,65 @@
 
     var plainK = computePlainCountForDay(n);
 
+    if (weekData.mode === "local") {
+      setTimeout(function () {
+        try {
+          var resLocal = window.WeekGen.generateLocalDayBatch(
+            player,
+            weekData,
+            choiceLog,
+            d,
+            n,
+            plainK,
+          );
+          hideDayTransitionThen(function () {
+            setWeekAiLoadingUi(false);
+            daySegmentCache[d] = resLocal.segments;
+            weekData.days[d] = resLocal.segments.map(function (s) {
+              return s.story;
+            });
+            aiLoading = false;
+            aiError = false;
+            var endedLoc = applyAiSegmentResult(resLocal.segments[i]);
+            btnEventNext.disabled = false;
+            if (!endedLoc) renderAiEventDisplay();
+          });
+        } catch (genErr) {
+          hideDayTransitionImmediate();
+          setWeekAiLoadingUi(false);
+          aiLoading = false;
+          aiError = true;
+          daySegmentCache[d] = null;
+          weekData.days[d] = [];
+          eventCard.textContent =
+            "本地生成异常：" +
+            (genErr && genErr.message ? genErr.message : String(genErr));
+          btnEventNext.textContent = "重试";
+          btnEventNext.hidden = false;
+          btnEventNext.disabled = false;
+          setChoiceUiVisible(false);
+        }
+      }, 100);
+      return;
+    }
+
+    if (!window.AIClient) {
+      hideDayTransitionImmediate();
+      setWeekAiLoadingUi(false);
+      aiLoading = false;
+      weekData.mode = "local";
+      weekData.fallbackFromAi = true;
+      weekData.segmentsFromAi = false;
+      refreshWeekModeBadge();
+      loadWeekSegment();
+      return;
+    }
+
     window.AIClient
       .generateDayBatch(player, weekData, choiceLog, d, n, plainK)
       .then(function (res) {
         hideDayTransitionThen(function () {
+          setWeekAiLoadingUi(false);
           daySegmentCache[d] = res.segments;
           weekData.days[d] = res.segments.map(function (s) {
             return s.story;
@@ -703,24 +770,51 @@
         });
       })
       .catch(function (err) {
-        hideDayTransitionImmediate();
-        aiLoading = false;
-        aiError = true;
-        daySegmentCache[d] = null;
-        weekData.days[d] = [];
-        eventCard.textContent =
-          "生成失败：" +
-          (err && err.message ? err.message : String(err)) +
-          "\n\n请稍后点击「重试」。";
-        btnEventNext.textContent = "重试";
-        btnEventNext.hidden = false;
-        btnEventNext.disabled = false;
-        setChoiceUiVisible(false);
+        try {
+          var resFb = window.WeekGen.generateLocalDayBatch(
+            player,
+            weekData,
+            choiceLog,
+            d,
+            n,
+            plainK,
+          );
+          hideDayTransitionImmediate();
+          setWeekAiLoadingUi(false);
+          weekData.mode = "local";
+          weekData.fallbackFromAi = true;
+          weekData.segmentsFromAi = false;
+          daySegmentCache[d] = resFb.segments;
+          weekData.days[d] = resFb.segments.map(function (s) {
+            return s.story;
+          });
+          aiLoading = false;
+          aiError = false;
+          refreshWeekModeBadge();
+          applyAiSegmentResult(resFb.segments[i]);
+          btnEventNext.disabled = false;
+          renderAiEventDisplay();
+        } catch (e2) {
+          hideDayTransitionImmediate();
+          setWeekAiLoadingUi(false);
+          aiLoading = false;
+          aiError = true;
+          daySegmentCache[d] = null;
+          weekData.days[d] = [];
+          eventCard.textContent =
+            "生成失败：" +
+            (err && err.message ? err.message : String(err)) +
+            "\n\n请稍后点击「重试」。";
+          btnEventNext.textContent = "重试";
+          btnEventNext.hidden = false;
+          btnEventNext.disabled = false;
+          setChoiceUiVisible(false);
+        }
       });
   }
 
   function renderAiEventDisplay() {
-    if (!weekData || weekData.mode !== "ai" || !player) return;
+    if (!weekData || !isSegmentWeek() || !player) return;
     var d = currentDayIndex;
     var i = currentEventIndex;
     var text = weekData.days[d][i];
@@ -732,8 +826,13 @@
     eventCard.textContent = text || "";
 
     if (aiFeedbackState && eventStatFeedback) {
-      eventStatFeedback.hidden = false;
-      eventStatFeedback.textContent = aiFeedbackState.text;
+      if (aiFeedbackState.text) {
+        eventStatFeedback.hidden = false;
+        eventStatFeedback.textContent = aiFeedbackState.text;
+      } else {
+        eventStatFeedback.hidden = true;
+        eventStatFeedback.textContent = "";
+      }
       setChoiceUiVisible(false);
       btnEventNext.hidden = false;
       btnEventNext.textContent = "继续";
@@ -768,10 +867,11 @@
   }
 
   function advanceAfterAiSegment(choiceEntry) {
-    if (!weekData || weekData.mode !== "ai" || !player) return;
+    if (!weekData || !isSegmentWeek() || !player) return;
     if (choiceEntry) {
       choiceLog.push(choiceEntry);
     }
+    pendingPlainEnding = null;
     aiFeedbackState = null;
     if (eventStatFeedback) {
       eventStatFeedback.hidden = true;
@@ -798,11 +898,11 @@
       currentDayIndex++;
       currentEventIndex = 0;
     }
-    loadAiSegment();
+    loadWeekSegment();
   }
 
   function onPickChoice(key) {
-    if (!weekData || weekData.mode !== "ai" || !pendingChoices || aiLoading) return;
+    if (!weekData || !isSegmentWeek() || !pendingChoices || aiLoading) return;
     if (pendingSegmentKind !== "choice") return;
     if (aiFeedbackState) return;
 
@@ -828,9 +928,15 @@
 
     var line = applyAngerFatigueFromDeltas(da, df);
     weekStatsEl.textContent = formatStatsLine(player);
-    if (maybeTriggerAngerEnding()) return;
-    if (maybeTriggerFatigueEnding()) return;
-    aiFeedbackState = { text: "【属性变化】" + line };
+    pendingPlainEnding = null;
+    if (player.anger >= STAT_MAX) {
+      pendingPlainEnding = "rage";
+    } else if (player.fatigue >= STAT_MAX) {
+      pendingPlainEnding = "fatigue";
+    }
+    aiFeedbackState = line
+      ? { text: "【属性变化】" + line }
+      : { text: null };
     pendingChoices = null;
     pendingSegmentKind = null;
     setChoiceUiVisible(false);
@@ -866,81 +972,42 @@
     });
   }
 
-  function renderCurrentEvent() {
-    if (!weekData || !player) return;
-
-    if (weekData.mode === "ai") {
-      if (!aiLoading && weekData.days[currentDayIndex][currentEventIndex]) {
-        renderAiEventDisplay();
-      }
-      return;
-    }
-
-    const dayEvents = weekData.days[currentDayIndex];
-    const label = weekData.dayLabels[currentDayIndex];
-    const total = dayEvents.length;
-    const idx = currentEventIndex;
-    const text = dayEvents[idx];
-
-    eventDayLabel.textContent = label;
-    if (eventProgress) {
-      eventProgress.hidden = false;
-      eventProgress.textContent = "第 " + (idx + 1) + " / " + total + " 件事";
-    }
-    eventCard.textContent = text;
-    setChoiceUiVisible(false);
-    btnEventNext.hidden = false;
-    btnEventNext.disabled = false;
-
-    const isLastOfDay = idx >= total - 1;
-    const isSunday = currentDayIndex === 6;
-
-    if (isLastOfDay && isSunday) {
-      btnEventNext.textContent = "生成本周汇报";
-    } else if (isLastOfDay) {
-      btnEventNext.textContent = "进入" + weekData.dayLabels[currentDayIndex + 1];
-    } else {
-      btnEventNext.textContent = "下一件";
-    }
-
-    renderWeekTabs();
-  }
-
   btnEventNext.addEventListener("click", function () {
     if (!weekData || !player) return;
 
-    if (weekData.mode === "ai") {
+    if (isSegmentWeek()) {
       if (aiLoading) return;
       if (aiError) {
         aiError = false;
-        loadAiSegment();
+        loadWeekSegment();
         return;
       }
       if (aiFeedbackState) {
+        if (pendingPlainEnding === "rage") {
+          pendingPlainEnding = null;
+          aiFeedbackState = null;
+          if (eventStatFeedback) {
+            eventStatFeedback.hidden = true;
+            eventStatFeedback.textContent = "";
+          }
+          enterEndingRageScreen();
+          return;
+        }
+        if (pendingPlainEnding === "fatigue") {
+          pendingPlainEnding = null;
+          aiFeedbackState = null;
+          if (eventStatFeedback) {
+            eventStatFeedback.hidden = true;
+            eventStatFeedback.textContent = "";
+          }
+          enterEndingFatigueScreen();
+          return;
+        }
         proceedAfterStatFeedback();
         return;
       }
       return;
     }
-
-    const dayEvents = weekData.days[currentDayIndex];
-    const isLastOfDay = currentEventIndex >= dayEvents.length - 1;
-
-    if (!isLastOfDay) {
-      currentEventIndex++;
-      renderCurrentEvent();
-      return;
-    }
-
-    if (currentDayIndex < 6) {
-      currentDayIndex++;
-      currentEventIndex = 0;
-      renderCurrentEvent();
-      return;
-    }
-
-    const reportText = window.WeekGen.buildWeeklyReport(player, weekData);
-    showWeeklyEnding(reportText);
   });
 
   btnReportAgain.addEventListener("click", function () {

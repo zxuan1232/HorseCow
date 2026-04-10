@@ -80,10 +80,10 @@
     return null;
   }
 
-  /** 提示模型尽量写足的篇幅（约 80～150 字为宜） */
-  var STORY_GUIDE_CHARS = 120;
-  /** 单条 story 绝对上限（200 个 Unicode 字符以内，含标点） */
-  var STORY_HARD_MAX_CHARS = 200;
+  /** 提示模型尽量写足的篇幅（约 150～260 字为宜） */
+  var STORY_GUIDE_CHARS = 200;
+  /** 单条 story 绝对上限（含标点与空格） */
+  var STORY_HARD_MAX_CHARS = 320;
   /** 智能截断时，句读处至少保留这么长才采用（避免只剩半句话） */
   var STORY_MIN_BREAK_LEN = 12;
   var DELTA_MIN = -5;
@@ -133,12 +133,22 @@
     return n;
   }
 
+  /** 怒气与疲劳至多一条轴非零；plain 与选项效果均适用；全零时默认怒气 +1 */
+  function enforceSingleAxisDeltas(da, df) {
+    da = parseIntDelta(da, 0);
+    df = parseIntDelta(df, 0);
+    if (da !== 0 && df === 0) return { deltaAnger: da, deltaFatigue: 0 };
+    if (da === 0 && df !== 0) return { deltaAnger: 0, deltaFatigue: df };
+    if (da !== 0 && df !== 0) {
+      if (Math.abs(da) >= Math.abs(df)) return { deltaAnger: da, deltaFatigue: 0 };
+      return { deltaAnger: 0, deltaFatigue: df };
+    }
+    return { deltaAnger: 1, deltaFatigue: 0 };
+  }
+
   function normalizeEffectBlock(raw) {
     var o = raw && typeof raw === "object" ? raw : {};
-    return {
-      deltaAnger: parseIntDelta(o.deltaAnger, 0),
-      deltaFatigue: parseIntDelta(o.deltaFatigue, 0),
-    };
+    return enforceSingleAxisDeltas(parseIntDelta(o.deltaAnger, 0), parseIntDelta(o.deltaFatigue, 0));
   }
 
   function normalizeEventType(et) {
@@ -174,11 +184,15 @@
     if (et === "choice") {
       throw new Error("某段为 choice 但缺少 choiceA/choiceB");
     }
+    var plainD = enforceSingleAxisDeltas(
+      parseIntDelta(obj.deltaAnger, 0),
+      parseIntDelta(obj.deltaFatigue, 0),
+    );
     return {
       story: story,
       eventType: "plain",
-      deltaAnger: parseIntDelta(obj.deltaAnger, 0),
-      deltaFatigue: parseIntDelta(obj.deltaFatigue, 0),
+      deltaAnger: plainD.deltaAnger,
+      deltaFatigue: plainD.deltaFatigue,
     };
   }
 
@@ -290,17 +304,17 @@
         " 段（选择占多数）。输出前请逐条核对 eventType 并计数；plain 仅写 deltaAnger/deltaFatigue，勿把无选项段标成 choice。",
     );
     lines.push(
-      "① plain：eventType:\"plain\"，无选项；必须给 deltaAnger、deltaFatigue（整数，通常 -3～+3），表示该段叙事对应的怒气、疲劳变更，与剧情一致（0～10 封顶，前端会截断）。玩家看到正文时即结算，无需再点「确定」。",
+      "① plain：eventType:\"plain\"，无选项；必须给 deltaAnger、deltaFatigue（整数，通常 ±1～±3）。**铁律：每一维里恰好只有一个非零**，要么只改怒气，要么只改疲劳，禁止两条同时非零，也禁止两条都是 0（与剧情一致；0～10 封顶由前端截断）。玩家看到正文时即结算。",
     );
     lines.push(
-      "② choice：eventType:\"choice\"，给 choiceA、choiceB（各 4～10 字），并给 effectA、effectB 对象，各含 deltaAnger、deltaFatigue，表示选该选项后的变更。冲突/施压/甩锅类优先用 choice。",
+      "② choice：eventType:\"choice\"，给 choiceA、choiceB（各 4～10 字），并给 effectA、effectB；**每个 effect 同样铁律：deltaAnger 与 deltaFatigue 恰好一轴非零**，禁止双非零或双零。冲突/施压/甩锅类优先用 choice。",
     );
     lines.push(
       "每条 story 请写完整、可读的一句话或小段，**建议约 " +
         STORY_GUIDE_CHARS +
         " 字以内**；**总长不得超过 " +
         STORY_HARD_MAX_CHARS +
-        " 个字符**（含标点与空格）。勿写半句、勿在句中戛然而止；数值须与剧情一致（如受气/憋屈可增怒气或疲劳，美食可减负，八卦可稍降怒气等）。",
+        " 个字符**（含标点与空格）。勿写半句、勿在句中戛然而止；数值须与剧情一致，且**每条只体现一条轴**（如受气增怒气、连轴转增疲劳、放松减负等，二选一写进非零的那一维）。",
     );
     lines.push("");
     if (ctx.isSundayBatch) {
@@ -319,7 +333,7 @@
     }
     lines.push("【输出格式】只输出一个 JSON，不要 markdown。示例（字段名必须一致）：");
     lines.push(
-      '{"segments":[{"eventType":"plain","story":"早高峰地铁挤到变形","deltaAnger":1,"deltaFatigue":1},{"eventType":"choice","story":"主管甩锅","choiceA":"据理力争","choiceB":"忍气吞声","effectA":{"deltaAnger":-1,"deltaFatigue":0},"effectB":{"deltaAnger":2,"deltaFatigue":1}}]}',
+      '{"segments":[{"eventType":"plain","story":"早高峰地铁挤到变形，你贴着门站成薄片，耳机里播着励志歌，心里在算迟到扣款。","deltaAnger":2,"deltaFatigue":0},{"eventType":"choice","story":"主管在会上把锅甩向你，全场安静。","choiceA":"据理力争","choiceB":"先认下再说","effectA":{"deltaAnger":-1,"deltaFatigue":0},"effectB":{"deltaAnger":0,"deltaFatigue":2}}]}',
     );
     lines.push("segments 内对象顺序 = 当天时间从早到晚的顺序。");
     return lines.join("\n");
@@ -422,7 +436,7 @@
           {
             role: "system",
             content:
-              "只输出合法 JSON：segments 数组；plain 含 story(建议充实、总长≤200字符)、deltaAnger、deltaFatigue；choice 另含 choiceA、choiceB、effectA、effectB（各含 deltaAnger、deltaFatigue）。简体中文。",
+              "只输出合法 JSON：segments 数组；plain 含 story(建议充实、总长≤320字符)、deltaAnger、deltaFatigue（怒气与疲劳恰好一轴非零）；choice 另含 choiceA、choiceB、effectA、effectB（每个 effect 同样一轴非零）。简体中文。",
           },
           { role: "user", content: prompt },
         ],
@@ -514,7 +528,7 @@
       isSundayBatch: dayIndex === 6,
     });
 
-    var maxTok = Math.min(4096, 800 + eventCount * 420);
+    var maxTok = Math.min(4096, 900 + eventCount * 520);
 
     var chain;
     if (s.useServerProxy) {
