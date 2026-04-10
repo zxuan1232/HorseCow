@@ -163,6 +163,12 @@
   var DEV_FORCE_WEEKLY_ENDING_ON_WEEK_START = false;
 
   var dayEventCounts = [];
+  /** 与 dayEventCounts 同日索引；开局一次随机，保证预取与正式请求 plain/choice 计数一致 */
+  var dayPlainCounts = [];
+  /** 每周递增，用于丢弃过期的在途 AI 请求写入缓存 */
+  var weekAiBatchGeneration = 0;
+  /** 同一天仅一条在途 AI 批请求 */
+  var aiDayBatchPromises = {};
   /** @type {Array<{dayIndex:number,segmentIndex:number,dayLabel:string,picked:string,label:string}>} */
   var choiceLog = [];
   var pendingChoices = null;
@@ -193,22 +199,105 @@
     return randInt(1, maxPlain);
   }
 
+  function buildDayPlainCountsFromEventCounts() {
+    var out = [];
+    var di;
+    for (di = 0; di < dayEventCounts.length; di++) {
+      out.push(computePlainCountForDay(dayEventCounts[di]));
+    }
+    return out;
+  }
+
+  /** 同一天的 AI 批只发起一次；预取与进入该天时共用同一 Promise */
+  function ensureAiDayBatch(dayIndex, n, plainK) {
+    if (!window.AIClient) {
+      return Promise.reject(new Error("AI 未就绪"));
+    }
+    var cache = daySegmentCache[dayIndex];
+    if (cache && cache.length >= n) {
+      return Promise.resolve({ segments: cache });
+    }
+    var existing = aiDayBatchPromises[dayIndex];
+    if (existing) return existing;
+    var gen = weekAiBatchGeneration;
+    var p = window.AIClient
+      .generateDayBatch(player, weekData, choiceLog, dayIndex, n, plainK)
+      .then(function (res) {
+        if (gen !== weekAiBatchGeneration) return res;
+        daySegmentCache[dayIndex] = res.segments;
+        weekData.days[dayIndex] = res.segments.map(function (s) {
+          return s.story;
+        });
+        return res;
+      })
+      .finally(function () {
+        delete aiDayBatchPromises[dayIndex];
+      });
+    aiDayBatchPromises[dayIndex] = p;
+    return p;
+  }
+
+  /** 在「当天最后一段」且已具备完整 choiceLog 时后台拉取下一天，减少跨日等待 */
+  function schedulePrefetchAiNextDayIfReady(dayIndex, segmentIndex) {
+    if (!weekData || weekData.mode !== "ai" || !weekData.segmentsFromAi) return;
+    if (!window.AIClient || !window.AIClient.isAiReady()) return;
+    var next = dayIndex + 1;
+    if (next > 6) return;
+    var nCur = dayEventCounts[dayIndex];
+    if (segmentIndex !== nCur - 1) return;
+    var c = daySegmentCache[dayIndex];
+    if (!c || !c[segmentIndex]) return;
+    if (c[segmentIndex].eventType === "choice") return;
+    var nNext = dayEventCounts[next];
+    var pk = dayPlainCounts[next];
+    ensureAiDayBatch(next, nNext, pk).catch(function () {});
+  }
+
   function clampStat(v) {
     return Math.max(0, Math.min(STAT_MAX, v));
   }
 
-  /** 应用增量并返回一行展示文案（怒气/疲劳的实际变化，已考虑上下限） */
+  /** 与 AI/本地事件一致：单条事件仅一轴 ±1～±2；解析失败按 0 再兜底 */
+  var EVENT_DELTA_MIN = -2;
+  var EVENT_DELTA_MAX = 2;
+
+  function coerceStatDelta(v) {
+    var n =
+      typeof v === "number" && !Number.isNaN(v) ? Math.trunc(v) : parseInt(v, 10);
+    if (Number.isNaN(n)) return 0;
+    if (n < EVENT_DELTA_MIN) return EVENT_DELTA_MIN;
+    if (n > EVENT_DELTA_MAX) return EVENT_DELTA_MAX;
+    return n;
+  }
+
+  /** 恰好一轴非零；全零时默认怒气 +1（避免「无属性变化」） */
+  function normalizeSingleAxisEventDelta(deltaAnger, deltaFatigue) {
+    var da = coerceStatDelta(deltaAnger);
+    var df = coerceStatDelta(deltaFatigue);
+    if (da !== 0 && df === 0) return { deltaAnger: da, deltaFatigue: 0 };
+    if (da === 0 && df !== 0) return { deltaAnger: 0, deltaFatigue: df };
+    if (da !== 0 && df !== 0) {
+      if (Math.abs(da) >= Math.abs(df)) return { deltaAnger: da, deltaFatigue: 0 };
+      return { deltaAnger: 0, deltaFatigue: df };
+    }
+    return { deltaAnger: 1, deltaFatigue: 0 };
+  }
+
+  /** 应用增量并返回一行展示文案（含被上下限截断时的说明，避免空反馈） */
   function applyAngerFatigueFromDeltas(deltaAnger, deltaFatigue) {
-    var da = typeof deltaAnger === "number" ? deltaAnger : 0;
-    var df = typeof deltaFatigue === "number" ? deltaFatigue : 0;
+    var norm = normalizeSingleAxisEventDelta(deltaAnger, deltaFatigue);
+    var da = norm.deltaAnger;
+    var df = norm.deltaFatigue;
     var beforeA = player.anger;
     var beforeF = player.fatigue;
     player.anger = clampStat(player.anger + da);
     player.fatigue = clampStat(player.fatigue + df);
-    return formatDeltaLine(player.anger - beforeA, player.fatigue - beforeF);
+    var actualA = player.anger - beforeA;
+    var actualF = player.fatigue - beforeF;
+    return formatDeltaLineForEvent(da, df, actualA, actualF);
   }
 
-  /** 只展示实际有变化的项；全无变化则返回空串 */
+  /** 只展示实际有变化的项 */
   function formatDeltaLine(dAnger, dFatigue) {
     var parts = [];
     if (dAnger !== 0) {
@@ -218,6 +307,25 @@
       parts.push("疲劳" + (dFatigue > 0 ? "+" + dFatigue : String(dFatigue)));
     }
     return parts.join(" · ");
+  }
+
+  /**
+   * 优先显示真实数值变化；若被 0～10 上限吃掉，则附带「已满/已触底」说明，仍展示事件意图。
+   */
+  function formatDeltaLineForEvent(nominalA, nominalF, actualA, actualF) {
+    var line = formatDeltaLine(actualA, actualF);
+    if (line) return line;
+    var intent = formatDeltaLine(nominalA, nominalF);
+    if (!intent) return "";
+    var notes = [];
+    if (nominalA !== 0 && actualA === 0) {
+      notes.push(nominalA > 0 ? "怒气已满" : "怒气已触底");
+    }
+    if (nominalF !== 0 && actualF === 0) {
+      notes.push(nominalF > 0 ? "疲劳已满" : "疲劳已触底");
+    }
+    if (!notes.length) return intent;
+    return intent + "（" + notes.join(" · ") + "）";
   }
 
   function rollInitialStats() {
@@ -394,13 +502,16 @@
     startEndingFatigue1Sequence();
   }
 
-  /** 抢救成功：进入下一天并继续本周（AI/本地同流程） */
+  /** 抢救成功：进入下一天并继续本周（AI/本地同流程）；幸运急救耗运，幸运 -3（不低于 0） */
   function resumeWeekAfterFatigueSuccess() {
     if (!player || !weekData || !isSegmentWeek()) return;
     hideDayTransitionImmediate();
     player.fatigue = 0;
     player.anger = 0;
+    player.luck = Math.max(0, player.luck - 3);
     weekStatsEl.textContent = formatStatsLine(player);
+    weekAiBatchGeneration++;
+    aiDayBatchPromises = {};
     if (currentDayIndex >= 6) {
       var reportText = window.WeekGen.buildWeeklyReport(player, weekData, {
         choiceLog: choiceLog,
@@ -608,6 +719,9 @@
     dayEventCounts = Array.from({ length: 7 }, function () {
       return randInt(4, 8);
     });
+    dayPlainCounts = buildDayPlainCountsFromEventCounts();
+    weekAiBatchGeneration++;
+    aiDayBatchPromises = {};
     choiceLog = [];
     pendingChoices = null;
     pendingSegmentKind = null;
@@ -649,6 +763,9 @@
     dayEventCounts = Array.from({ length: 7 }, function () {
       return randInt(4, 8);
     });
+    dayPlainCounts = buildDayPlainCountsFromEventCounts();
+    weekAiBatchGeneration++;
+    aiDayBatchPromises = {};
     choiceLog = [];
     pendingChoices = null;
     pendingSegmentKind = null;
@@ -753,6 +870,7 @@
       var endedByEnding = applyAiSegmentResult(cache[i]);
       btnEventNext.disabled = false;
       if (!endedByEnding) renderAiEventDisplay();
+      schedulePrefetchAiNextDayIfReady(d, i);
       return;
     }
 
@@ -779,7 +897,7 @@
     btnEventNext.textContent = "生成中…";
     eventCard.textContent = "";
 
-    var plainK = computePlainCountForDay(n);
+    var plainK = dayPlainCounts[d] !== undefined ? dayPlainCounts[d] : computePlainCountForDay(n);
 
     if (weekData.mode === "local") {
       setTimeout(function () {
@@ -835,19 +953,15 @@
       return;
     }
 
-    window.AIClient
-      .generateDayBatch(player, weekData, choiceLog, d, n, plainK)
+    ensureAiDayBatch(d, n, plainK)
       .then(function (res) {
         hideDayTransitionThen(function () {
           setWeekAiLoadingUi(false);
-          daySegmentCache[d] = res.segments;
-          weekData.days[d] = res.segments.map(function (s) {
-            return s.story;
-          });
           aiLoading = false;
           var endedByEnding2 = applyAiSegmentResult(res.segments[i]);
           btnEventNext.disabled = false;
           if (!endedByEnding2) renderAiEventDisplay();
+          schedulePrefetchAiNextDayIfReady(d, i);
         });
       })
       .catch(function (err) {
@@ -1017,8 +1131,6 @@
     if (seg.eventType !== "choice") return;
 
     var eff = key === "A" ? seg.effectA : seg.effectB;
-    var da = eff && typeof eff.deltaAnger === "number" ? eff.deltaAnger : 0;
-    var df = eff && typeof eff.deltaFatigue === "number" ? eff.deltaFatigue : 0;
     var label = key === "A" ? pendingChoices.a : pendingChoices.b;
 
     choiceLog.push({
@@ -1029,7 +1141,21 @@
       label: label,
     });
 
-    var line = applyAngerFatigueFromDeltas(da, df);
+    if (
+      weekData.mode === "ai" &&
+      weekData.segmentsFromAi &&
+      window.AIClient &&
+      window.AIClient.isAiReady() &&
+      d < 6 &&
+      i === dayEventCounts[d] - 1
+    ) {
+      ensureAiDayBatch(d + 1, dayEventCounts[d + 1], dayPlainCounts[d + 1]).catch(function () {});
+    }
+
+    var line = applyAngerFatigueFromDeltas(
+      eff && eff.deltaAnger,
+      eff && eff.deltaFatigue,
+    );
     weekStatsEl.textContent = formatStatsLine(player);
 
     var outcomeRaw =

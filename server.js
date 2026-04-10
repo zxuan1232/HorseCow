@@ -157,7 +157,7 @@ async function callOpenAICompatible(baseUrl, apiKey, model, prompt, maxTokens) {
         {
           role: "system",
           content:
-            "只输出合法 JSON：segments 数组；plain 含 story、deltaAnger、deltaFatigue（±1 或 ±2，恰好一轴非零，以 ±1 为主）；choice 另含 choiceA、choiceB、outcomeA、outcomeB、effectA、effectB（同上）。简体中文。",
+            "只输出合法 JSON：segments 数组；plain 含 story、deltaAnger、deltaFatigue（±1 或 ±2，恰好一轴非零，以 ±1 为主）；choice 另含 choiceA、choiceB、outcomeA、outcomeB、effectA、effectB（同上）。story/outcome 须以第二人称「你」叙述。简体中文。",
         },
         { role: "user", content: prompt },
       ],

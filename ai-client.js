@@ -259,6 +259,9 @@
       "你是文字游戏《牛马的一周》的叙事引擎。**故事必须写现实职场与各行各业日常**（办公室、工地、门店、医院、学校等真实场景），禁止修仙、玄幻、法术、宗门等设定；人名地名为现实风格。",
     );
     lines.push(
+      "【叙述视角】**面向玩家统一用第二人称「你」**：写「你遭遇了……」「对方朝你丢来一堆活……」「你心里一沉」；不要写成旁观第三人称（如「TA 怎样」「某某（玩家姓名）怎样」）。姓名仅用于设定与上下文，**正文里不要反复直呼玩家姓名当主语**。choiceA/choiceB 用玩家口吻的短动作即可。",
+    );
+    lines.push(
       "【属性与剧情的常识映射】必须让**事件正文与 delta 一眼能对上**，避免「故事很治愈数值却在狂涨」。示例（写进 story，再选对应一轴）：吃好饭/喝奶茶/午休眯一会→**疲劳降**；听八卦、同事一起吐槽、误会澄清、小胜利→**怒气降**；忍气吞声、被甩锅、被怼、憋火→**怒气升**；接了不可能的任务、通宵、连轴会、奔波跑腿→**疲劳升**；失眠、头疼、感冒硬撑→**疲劳升**。",
     );
     lines.push(
@@ -334,10 +337,10 @@
         " 段（选择占多数）。输出前请逐条核对 eventType 并计数；plain 仅写 deltaAnger/deltaFatigue，勿把无选项段标成 choice。",
     );
     lines.push(
-      "① plain：eventType:\"plain\"，无选项；deltaAnger、deltaFatigue 为 **±1 或 ±2 之一轴非零**（以 ±1 为主）。**story 里要写出为何涨或跌**，强度与数字一致。玩家看到正文时即结算。",
+      "① plain：eventType:\"plain\"，无选项；deltaAnger、deltaFatigue 为 **±1 或 ±2 之一轴非零**（以 ±1 为主）。**story 用「你」为主语写遭遇与感受**，写出为何涨或跌，强度与数字一致。玩家看到正文时即结算。",
     );
     lines.push(
-      "② choice：除 choiceA、choiceB、effectA、effectB 外，**必须给 outcomeA、outcomeB**（各一段，约 40～120 字）：写清身心变化，**须与 effect 一致**；两选项尽量一缓一耗或一升一降，避免两边都大幅加怒/加疲；**不要设计成两个选项都轻松减压**，可常见「小降 vs 小升/中升」或「一侧几乎不回血」。**每个 effect：deltaAnger 与 deltaFatigue 恰好一轴非零**，可正可负，禁止双非零或双零。",
+      "② choice：除 choiceA、choiceB、effectA、effectB 外，**必须给 outcomeA、outcomeB**（各一段，约 40～120 字）：**同样以「你」为主语**写清身心变化，**须与 effect 一致**；两选项尽量一缓一耗或一升一降，避免两边都大幅加怒/加疲；**不要设计成两个选项都轻松减压**，可常见「小降 vs 小升/中升」或「一侧几乎不回血」。**每个 effect：deltaAnger 与 deltaFatigue 恰好一轴非零**，可正可负，禁止双非零或双零。",
     );
     lines.push(
       "每条 story 请写完整、可读的一句话或小段，**建议约 " +
@@ -466,7 +469,7 @@
           {
             role: "system",
             content:
-              "只输出合法 JSON：segments 数组；plain 含 story、deltaAnger、deltaFatigue（±1 或 ±2，恰好一轴非零，以 ±1 为主）；choice 另含 choiceA、choiceB、outcomeA、outcomeB、effectA、effectB（同上）。简体中文。",
+              "只输出合法 JSON：segments 数组；plain 含 story、deltaAnger、deltaFatigue（±1 或 ±2，恰好一轴非零，以 ±1 为主）；choice 另含 choiceA、choiceB、outcomeA、outcomeB、effectA、effectB（同上）。story/outcome 须以第二人称「你」叙述。简体中文。",
           },
           { role: "user", content: prompt },
         ],

@@ -111,13 +111,12 @@
     return [
       // 周一
       function step(p, kw, band, rnd) {
-        const g = genderTone(p.gender);
         const lines = [
           () =>
-            `${p.name} 在 ${kw.scene} 打卡，${DAY_LABELS[0]} 的闹钟比周末狠三倍。`,
+            `你在 ${kw.scene} 打卡，${DAY_LABELS[0]} 的闹钟比周末狠三倍。`,
           () =>
             band === "junior"
-              ? `早会前，${g} 偷偷看了一眼昨晚没回完的消息，深吸一口气。`
+              ? `早会前，你偷偷看了一眼昨晚没回完的消息，深吸一口气。`
               : `晨会一开始，${kw.peer} 就把「本周重点」写满了白板。`,
           () =>
             `你打开 ${kw.tool}，未办事项像滚雪球，${kw.crisis} 的字样一闪而过。`,
@@ -219,7 +218,6 @@
       },
       // 周日
       function step(p, kw, band, rnd) {
-        const g = genderTone(p.gender);
         const lines = [
           () =>
             `${DAY_LABELS[6]}，洗好的衣服、没写完的总结、和隐隐发作的「明天恐惧症」。`,
@@ -227,7 +225,7 @@
             `你把 ${kw.tool} 粗略过了一遍，给下周列了三个「必须搞定」。`,
           () =>
             band === "junior"
-              ? `${g} 给爸妈回了语音，说「都挺好」，背景是键盘声。`
+              ? `你给爸妈回了语音，说「都挺好」，背景是键盘声。`
               : `你给自己留了一小段完全空白的时间，什么都不为，很难得。`,
           () =>
             `傍晚你开始整理本周碎片：截图、便签、聊天记录里的待办。`,
@@ -273,7 +271,7 @@
     return Math.max(-2, Math.min(2, n));
   }
 
-  /** 无选项段：单轴非零；略偏多「恢复」（负 delta）、涨幅以 1 为主，让玩家更耐玩 */
+  /** 无选项段：单轴非零；略偏多「压力」（正 delta），且上升时略易出现 ±2、下降时略偏 ±1，整体略难一档 */
   function rollSingleAxisPlainDelta(rnd, personalityTags) {
     const tags = Array.isArray(personalityTags) ? personalityTags : [];
     let wA = 1;
@@ -291,8 +289,14 @@
     if (tags.includes("乐天派")) wA *= 0.9;
     if (tags.includes("外向")) wA += 0.12;
     if (tags.includes("随和")) wF += 0.1;
-    const stress = rnd() < 0.44;
-    const mag = rnd() < 0.82 ? 1 : 2;
+    const stress = rnd() < 0.52;
+    const mag = stress
+      ? rnd() < 0.76
+        ? 1
+        : 2
+      : rnd() < 0.88
+        ? 1
+        : 2;
     const val = (stress ? 1 : -1) * mag;
     const pickAnger = rnd() * (wA + wF) < wA;
     if (pickAnger) return { deltaAnger: val, deltaFatigue: 0 };
@@ -383,7 +387,7 @@
         ? { deltaAnger: da, deltaFatigue: 0 }
         : { deltaAnger: 0, deltaFatigue: df };
     }
-    const v = (rnd() < 0.5 ? 1 : -1) * (rnd() < 0.82 ? 1 : 2);
+    const v = (rnd() < 0.56 ? 1 : -1) * (rnd() < 0.82 ? 1 : 2);
     return rnd() < 0.5
       ? { deltaAnger: v, deltaFatigue: 0 }
       : { deltaAnger: 0, deltaFatigue: v };
@@ -392,7 +396,7 @@
   /** 与 AI 段结构一致：plain / choice */
   function fillTpl(s, p, kw, g, dayLabel) {
     return String(s)
-      .replace(/NAME/g, p.name)
+      .replace(/NAME/g, "你")
       .replace(/GENDER/g, g)
       .replace(/SCENE/g, kw.scene)
       .replace(/TOOL/g, kw.tool)
