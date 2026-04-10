@@ -13,7 +13,7 @@
 window.GAME_AI_CONFIG = {
   enabled: true,
   provider: "gemini",
-  apiKey: "AIzaSyD_aHnDUIKjVdILYtr51XkVRejRf0A2fG4",
+  apiKey: "",
   model: "gemini-2.5-flash-lite",
   baseUrl: "https://api.groq.com/openai/v1",
   openaiModel: "llama-3.3-70b-versatile",
