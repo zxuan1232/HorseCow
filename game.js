@@ -631,12 +631,30 @@
     return String(lib[idx] || "").trim();
   }
 
-  function showWeeklyEnding(reportText) {
+  function showWeeklyEnding(reportResult) {
+    var body = "";
+    var closing = "";
+    if (
+      reportResult &&
+      typeof reportResult === "object" &&
+      typeof reportResult.body === "string"
+    ) {
+      body = reportResult.body;
+      closing = String(reportResult.closing || "").trim();
+    } else if (typeof reportResult === "string") {
+      body = reportResult;
+    }
     if (weeklyInsightEl) {
-      weeklyInsightEl.textContent = pickWeeklyInsight();
+      if (closing) {
+        weeklyInsightEl.textContent = closing;
+        weeklyInsightEl.classList.add("weekly-insight--summary");
+      } else {
+        weeklyInsightEl.textContent = pickWeeklyInsight();
+        weeklyInsightEl.classList.remove("weekly-insight--summary");
+      }
     }
     if (reportBody) {
-      reportBody.textContent = reportText || "";
+      reportBody.textContent = body;
     }
     showScreen("report");
   }

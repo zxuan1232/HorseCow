@@ -899,6 +899,7 @@
   function buildWeeklyReport(profile, daysData, extra) {
     extra = extra || {};
     const kw = getKw(profile.industry);
+    const total = daysData.days.reduce((a, b) => a + (b ? b.length : 0), 0);
     const lines = [];
     lines.push(
       `${profile.name}（${profile.gender}，${profile.age} 岁 · ${profile.industry}）`,
@@ -918,27 +919,8 @@
       lines.push("· （未记录属性）");
     }
     lines.push("");
-    if (extra.choiceLog && extra.choiceLog.length) {
-      lines.push("【本周抉择】");
-      extra.choiceLog.forEach((c) => {
-        lines.push(
-          `· ${c.dayLabel} 第${c.segmentIndex + 1} 段后：选 ${c.picked}（${c.label}）`,
-        );
-      });
-      lines.push("");
-    }
     lines.push("【本周掠影】");
-    daysData.dayLabels.forEach((label, i) => {
-      const evs = daysData.days[i];
-      const hook = (evs && evs[0]) || "（平静的一天）";
-      lines.push(`· ${label}：${hook}`);
-    });
-    lines.push("");
-    lines.push("【数据向吐槽】");
-    const total = daysData.days.reduce((a, b) => a + (b ? b.length : 0), 0);
-    lines.push(`· 本周遭遇事件条数：${total}（含心理活动与物理伤害）`);
-    lines.push(`· 高频场景：${kw.scene}；高频工具：${kw.tool}`);
-    lines.push(`· 危机/插曲关键词：${kw.crisis}`);
+    lines.push(`· 七天下来约 ${total} 段经历，多半发生在「${kw.scene}」一带。`);
     lines.push("");
     const closings = [
       "总结：牛马虽累，班还是要上；下周继续对齐颗粒度。",
@@ -946,8 +928,8 @@
       "本周 KPI：活着。恭喜超额完成。",
     ];
     const idx = Math.abs(hashProfile(profile) + total) % closings.length;
-    lines.push(closings[idx]);
-    return lines.join("\n");
+    const closing = closings[idx];
+    return { body: lines.join("\n"), closing };
   }
 
   global.WeekGen = {
