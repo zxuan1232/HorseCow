@@ -269,6 +269,10 @@
     );
     lines.push("");
     lines.push("【固定角色】");
+    var jobRoleStr =
+      player.jobRole && String(player.jobRole).trim()
+        ? String(player.jobRole).trim()
+        : "未指定";
     lines.push(
       "姓名：" +
         player.name +
@@ -277,7 +281,12 @@
         "；年龄：" +
         player.age +
         "；行业：" +
-        player.industry,
+        player.industry +
+        "；**岗位（工种）**：" +
+        jobRoleStr,
+    );
+    lines.push(
+      "【岗位叙事】本日事件须**贴合该岗位真实日常**（例：程序员—需求/联调/缺陷与排期；测试—用例/缺陷/版本；产品经理—需求/排期/协调；美术—稿件/修改/风格；运营—活动/数据/投放）。避免写成与岗位无关的泛泛职场。",
     );
     lines.push(
       "能力/幸运/怒气/疲劳（上限10）：" +

@@ -21,11 +21,13 @@
   const nameInput = document.getElementById("player-name");
   const ageInput = document.getElementById("player-age");
   const industrySelect = document.getElementById("industry");
+  const jobRoleSelect = document.getElementById("job-role");
 
   const summaryName = document.getElementById("summary-name");
   const summaryGender = document.getElementById("summary-gender");
   const summaryAge = document.getElementById("summary-age");
   const summaryIndustry = document.getElementById("summary-industry");
+  const summaryJobRole = document.getElementById("summary-job-role");
   const summaryPersonality = document.getElementById("summary-personality");
   const summaryAbility = document.getElementById("summary-ability");
   const summaryLuck = document.getElementById("summary-luck");
@@ -359,7 +361,50 @@
     );
   }
 
-  /** @type {{ name: string, gender: string, age: number, industry: string, personalityTags: string[], ability: number, luck: number, anger: number, fatigue: number } | null} */
+  /**
+   * 行业 → 可选岗位（仅用于表单与 AI 依据；本地 weekgen 仍只按行业关键词生成）。
+   */
+  var JOB_ROLES_BY_INDUSTRY = {
+    互联网: ["产品经理", "程序员", "测试", "前端", "后端", "运维", "美术", "运营", "其他"],
+    金融: ["柜员", "客户经理", "风控", "合规", "分析师", "销售", "其他"],
+    制造业: ["产线", "质检", "计划", "采购", "工艺", "设备", "其他"],
+    教育: ["教师", "教务", "教研", "市场招生", "行政", "其他"],
+    医疗: ["医生", "护士", "医技", "行政", "运营", "其他"],
+    零售: ["门店", "仓储", "采购", "客服", "运营", "其他"],
+    建筑: ["施工", "设计", "造价", "安全", "资料", "其他"],
+    公共服务: ["窗口", "执法", "后勤", "行政", "其他"],
+    自由职业: ["接单交付", "创作", "咨询", "培训", "其他"],
+    其他: ["通用岗位", "管理", "执行", "支持", "其他"],
+  };
+
+  function syncJobRoleOptions() {
+    if (!jobRoleSelect || !industrySelect) return;
+    var ind = industrySelect.value;
+    var roles = JOB_ROLES_BY_INDUSTRY[ind] || JOB_ROLES_BY_INDUSTRY["其他"];
+    jobRoleSelect.innerHTML = "";
+    var ph = document.createElement("option");
+    ph.value = "";
+    ph.disabled = true;
+    ph.selected = true;
+    ph.textContent = "请选择岗位";
+    jobRoleSelect.appendChild(ph);
+    for (var ri = 0; ri < roles.length; ri++) {
+      var o = document.createElement("option");
+      o.value = roles[ri];
+      o.textContent = roles[ri];
+      jobRoleSelect.appendChild(o);
+    }
+    jobRoleSelect.disabled = !ind;
+    jobRoleSelect.required = !!ind;
+  }
+
+  function formatPlayerHeadline(p) {
+    if (!p) return "";
+    var jr = p.jobRole && String(p.jobRole).trim();
+    return p.name + " · " + p.industry + (jr ? " · " + jr : "") + " · " + p.age + " 岁";
+  }
+
+  /** @type {{ name: string, gender: string, age: number, industry: string, jobRole: string, personalityTags: string[], ability: number, luck: number, anger: number, fatigue: number } | null} */
   let player = null;
 
   const PERSONALITY_TAG_ALL = [
@@ -712,6 +757,12 @@
       return;
     }
 
+    if (!jobRoleSelect || !jobRoleSelect.value) {
+      showError("请选择岗位。");
+      if (jobRoleSelect) jobRoleSelect.focus();
+      return;
+    }
+
     const personalityTags = getPersonalityTagsFromForm();
     if (personalityTags.length > 3) {
       showError("性格标签最多选择 3 个。");
@@ -724,6 +775,7 @@
       gender: getGender(),
       age,
       industry: industrySelect.value,
+      jobRole: jobRoleSelect.value,
       personalityTags: personalityTags,
       ability: stats.ability,
       luck: stats.luck,
@@ -735,6 +787,7 @@
     summaryGender.textContent = player.gender;
     summaryAge.textContent = String(age);
     summaryIndustry.textContent = player.industry;
+    if (summaryJobRole) summaryJobRole.textContent = player.jobRole;
     if (summaryPersonality) {
       summaryPersonality.textContent = personalityTags.length ? personalityTags.join("、") : "未选";
     }
@@ -780,8 +833,7 @@
     currentDayIndex = 0;
     currentEventIndex = 0;
     daySegmentCache = [null, null, null, null, null, null, null];
-    weekPlayerLine.textContent =
-      player.name + " · " + player.industry + " · " + player.age + " 岁";
+    weekPlayerLine.textContent = formatPlayerHeadline(player);
     weekStatsEl.textContent = formatStatsLine(player);
     setChoiceUiVisible(false);
     btnEventNext.hidden = true;
@@ -824,8 +876,7 @@
     currentDayIndex = 0;
     currentEventIndex = 0;
     daySegmentCache = [null, null, null, null, null, null, null];
-    weekPlayerLine.textContent =
-      player.name + " · " + player.industry + " · " + player.age + " 岁";
+    weekPlayerLine.textContent = formatPlayerHeadline(player);
     weekStatsEl.textContent = formatStatsLine(player);
     setChoiceUiVisible(false);
     btnEventNext.hidden = true;
@@ -1382,7 +1433,7 @@
 
   function fillRandomSetupForDev() {
     if (!DEV_AUTO_FILL_SETUP) return;
-    if (!form || !nameInput || !ageInput || !industrySelect) return;
+    if (!form || !nameInput || !ageInput || !industrySelect || !jobRoleSelect) return;
 
     var names = [
       "王小明",
@@ -1415,6 +1466,15 @@
     if (industries.length) {
       industrySelect.value = industries[randInt(0, industries.length - 1)];
     }
+    syncJobRoleOptions();
+    var jrv = [];
+    var jropts = jobRoleSelect.querySelectorAll("option");
+    for (var ji = 0; ji < jropts.length; ji++) {
+      if (jropts[ji].value) jrv.push(jropts[ji].value);
+    }
+    if (jrv.length) {
+      jobRoleSelect.value = jrv[randInt(0, jrv.length - 1)];
+    }
 
     var pBoxes = form.querySelectorAll('input[name="personality"]');
     for (var pi = 0; pi < pBoxes.length; pi++) {
@@ -1445,6 +1505,10 @@
   }
 
   fillRandomSetupForDev();
+
+  if (industrySelect) {
+    industrySelect.addEventListener("change", syncJobRoleOptions);
+  }
 
   if (btnIntroYes) {
     btnIntroYes.addEventListener("click", function () {

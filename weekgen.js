@@ -907,6 +907,9 @@
     lines.push(
       `角色：${profile.name} · ${profile.gender} · ${profile.age} 岁 · ${profile.industry}`,
     );
+    if (profile.jobRole && String(profile.jobRole).trim()) {
+      lines.push(`岗位（工种）：${String(profile.jobRole).trim()}`);
+    }
     lines.push(
       `行业意象：场景「${kw.scene}」；工具/事务「${kw.tool}」；插曲「${kw.crisis}」`,
     );
@@ -964,7 +967,11 @@
     extra = extra || {};
     const lines = [];
     lines.push(
-      `${profile.name}（${profile.gender}，${profile.age} 岁 · ${profile.industry}）`,
+      `${profile.name}（${profile.gender}，${profile.age} 岁 · ${profile.industry}${
+        profile.jobRole && String(profile.jobRole).trim()
+          ? " · " + String(profile.jobRole).trim()
+          : ""
+      }）`,
     );
     lines.push("");
     lines.push("【属性】（上限 10）");

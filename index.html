@@ -127,6 +127,14 @@
           </div>
 
           <div class="field">
+            <label for="job-role">岗位</label>
+            <select id="job-role" name="jobRole" required disabled>
+              <option value="" disabled selected>请先选择行业</option>
+            </select>
+            <p class="field-hint">与本周 AI 事件强相关；选行业后可选具体工种。</p>
+          </div>
+
+          <div class="field">
             <span class="label-text">性格标签（可选，最多 3 个）</span>
             <p class="field-hint">会影响本周事件的语气与走向；可不选。</p>
             <div class="radio-row personality-tags" role="group" aria-label="性格标签">
@@ -209,6 +217,10 @@
             <div>
               <dt>行业</dt>
               <dd id="summary-industry">—</dd>
+            </div>
+            <div>
+              <dt>岗位</dt>
+              <dd id="summary-job-role">—</dd>
             </div>
             <div>
               <dt>性格标签</dt>
