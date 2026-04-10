@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>我的牛马生涯</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="bg-pattern" aria-hidden="true"></div>
+
+    <main class="app">
+      <!-- 开场提问 -->
+      <section id="screen-intro-question" class="screen screen--active">
+        <header class="hero hero--compact">
+          <h1 class="hero__title">
+            你是<span class="intro-highlight">牛马</span>吗？
+          </h1>
+        </header>
+        <div class="intro-actions">
+          <button type="button" id="btn-intro-yes" class="btn btn--primary">是吧</button>
+          <button type="button" id="btn-intro-no" class="btn btn--ghost">必然不是</button>
+        </div>
+      </section>
+
+      <!-- 开场分支：是吧 -->
+      <section id="screen-intro-yes" class="screen" hidden>
+        <div class="intro-meme-card">
+          <img
+            class="intro-meme-img"
+            src="assets/emoj1.jpeg"
+            alt="表情图 1"
+            decoding="async"
+          />
+        </div>
+        <button type="button" id="btn-intro-yes-next" class="btn btn--primary">我谢谢您嘞</button>
+      </section>
+
+      <!-- 开场分支：必然不是 -->
+      <section id="screen-intro-no" class="screen" hidden>
+        <div class="intro-meme-card">
+          <img
+            class="intro-meme-img"
+            src="assets/emoj2.jpeg"
+            alt="表情图 2"
+            decoding="async"
+          />
+        </div>
+        <button type="button" id="btn-intro-no-next" class="btn btn--primary">？？？</button>
+      </section>
+
+      <!-- 初始设置 -->
+      <section id="screen-setup" class="screen" hidden>
+        <header class="hero">
+          <p class="hero__tag">网页游戏</p>
+          <h1 class="hero__title">我的牛马生涯</h1>
+          <p class="hero__subtitle">在格子间里，书写属于你的传说。</p>
+        </header>
+
+        <form id="setup-form" class="setup-form" novalidate>
+          <div class="field">
+            <label for="player-name">姓名</label>
+            <input
+              id="player-name"
+              name="name"
+              type="text"
+              maxlength="20"
+              placeholder="请输入称呼"
+              autocomplete="nickname"
+              required
+            />
+          </div>
+
+          <div class="field">
+            <span class="label-text">性别</span>
+            <div class="radio-row" role="radiogroup" aria-label="性别">
+              <label class="chip">
+                <input type="radio" name="gender" value="男" checked />
+                <span>男</span>
+              </label>
+              <label class="chip">
+                <input type="radio" name="gender" value="女" />
+                <span>女</span>
+              </label>
+              <label class="chip">
+                <input type="radio" name="gender" value="其他" />
+                <span>其他</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="player-age">年龄</label>
+            <input
+              id="player-age"
+              name="age"
+              type="number"
+              min="16"
+              max="80"
+              step="1"
+              placeholder="例如 28"
+              required
+            />
+          </div>
+
+          <div class="field">
+            <label for="industry">行业</label>
+            <select id="industry" name="industry" required>
+              <option value="" disabled selected>请选择行业</option>
+              <option value="互联网">互联网 / 软件</option>
+              <option value="金融">金融 / 保险</option>
+              <option value="制造业">制造业</option>
+              <option value="教育">教育 / 培训</option>
+              <option value="医疗">医疗 / 健康</option>
+              <option value="零售">零售 / 电商</option>
+              <option value="建筑">建筑 / 地产</option>
+              <option value="公共服务">公共服务</option>
+              <option value="自由职业">自由职业</option>
+              <option value="其他">其他</option>
+            </select>
+          </div>
+
+          <p id="setup-error" class="form-error" role="alert" hidden></p>
+
+          <button type="submit" class="btn btn--primary">开启</button>
+        </form>
+      </section>
+
+      <!-- 角色确认 -->
+      <section id="screen-profile" class="screen" hidden>
+        <header class="hero hero--compact">
+          <h1 class="hero__title">我的牛马生涯</h1>
+          <p class="hero__subtitle">角色已创建</p>
+        </header>
+
+        <div class="summary-card">
+          <dl class="summary-list">
+            <div>
+              <dt>姓名</dt>
+              <dd id="summary-name">—</dd>
+            </div>
+            <div>
+              <dt>性别</dt>
+              <dd id="summary-gender">—</dd>
+            </div>
+            <div>
+              <dt>年龄</dt>
+              <dd id="summary-age">—</dd>
+            </div>
+            <div>
+              <dt>行业</dt>
+              <dd id="summary-industry">—</dd>
+            </div>
+          </dl>
+        </div>
+
+        <div class="summary-card summary-card--stats">
+          <p class="stats-cap-hint">属性上限均为 10；以下为开局随机结果。</p>
+          <dl class="stats-grid">
+            <div>
+              <dt>能力</dt>
+              <dd id="summary-ability">—</dd>
+            </div>
+            <div>
+              <dt>幸运</dt>
+              <dd id="summary-luck">—</dd>
+            </div>
+            <div>
+              <dt>怒气</dt>
+              <dd id="summary-anger">—</dd>
+            </div>
+            <div>
+              <dt>疲劳</dt>
+              <dd id="summary-fatigue">—</dd>
+            </div>
+          </dl>
+        </div>
+
+        <p class="next-hint">从周一开始，逐日经历事件；完成周日即可生成本周汇报。</p>
+
+        <p id="profile-mode-hint" class="mode-debug mode-debug--profile" aria-live="polite"></p>
+
+        <button type="button" id="btn-start-week" class="btn btn--primary">进入本周</button>
+        <button type="button" id="btn-back-setup" class="btn btn--ghost">返回修改</button>
+      </section>
+
+      <!-- 结局1-①：仅本页；点「辞职」后切到 screen-ending-rage-2 -->
+      <section id="screen-ending-rage" class="screen screen-ending-rage" hidden>
+        <div class="ending-rage-panel">
+          <p id="ending-rage-burst" class="ending-rage-burst" aria-live="assertive">
+            老子不干了！！！
+          </p>
+          <button type="button" id="btn-ending-resign" class="btn btn--danger">
+            辞职！必须辞！
+          </button>
+        </div>
+      </section>
+
+      <!-- 结局1-②：打字机 + 回首页（由「辞职」进入） -->
+      <section id="screen-ending-rage-2" class="screen screen-ending-rage" hidden>
+        <div class="ending-rage-panel">
+          <pre id="ending-rage-typewriter" class="ending-rage-typewriter"></pre>
+          <button
+            type="button"
+            id="btn-ending-restart"
+            class="btn btn--primary"
+            hidden
+          >
+            换个地方当牛马吧
+          </button>
+        </div>
+      </section>
+
+      <!-- 结局2-①：晕厥前兆 + 眨眼 + 闭眼 -->
+      <section id="screen-ending-fatigue-1" class="screen screen-ending-fatigue" hidden>
+        <div class="ending-fatigue-panel">
+          <p class="ending-fatigue-line ending-fatigue-line--shake" aria-live="polite">
+            怎么感觉有点……不对呢
+          </p>
+        </div>
+        <div id="ending-fatigue-blink" class="ending-fatigue-blink" aria-hidden="true"></div>
+        <div id="ending-fatigue-eyelids" class="ending-fatigue-eyelids" aria-hidden="true">
+          <div class="ending-fatigue-eyelid ending-fatigue-eyelid--top"></div>
+          <div class="ending-fatigue-eyelid ending-fatigue-eyelid--bottom"></div>
+        </div>
+      </section>
+
+      <!-- 结局2-②：晕厥 -->
+      <section id="screen-ending-fatigue-2" class="screen screen-ending-fatigue" hidden>
+        <div class="ending-fatigue-panel">
+          <p class="ending-fatigue-line">你因过度疲劳陷入了晕厥</p>
+          <button type="button" id="btn-fatigue-rescue" class="btn btn--primary">
+            抢救！
+          </button>
+        </div>
+      </section>
+
+      <!-- 结局2-③：救护车穿梭 -->
+      <section id="screen-ending-fatigue-3" class="screen screen-ending-fatigue" hidden>
+        <div class="ending-fatigue-ambulance-wrap" aria-hidden="true">
+          <p class="ending-fatigue-ambulance-hint">抢救中……</p>
+          <div class="ending-fatigue-ambulance-track">
+            <img
+              class="ending-fatigue-ambulance-img"
+              src="assets/ambulance.png"
+              alt=""
+              width="200"
+              height="80"
+              decoding="async"
+              onerror="this.style.display='none';var s=this.nextElementSibling;if(s)s.style.display='block';"
+            />
+            <svg
+              class="ending-fatigue-ambulance-svg"
+              style="display: none"
+              viewBox="0 0 200 80"
+              width="200"
+              height="80"
+              aria-hidden="true"
+            >
+              <rect x="0" y="0" width="200" height="80" fill="#fff" rx="6" />
+              <rect x="0" y="22" width="200" height="8" fill="#e04545" />
+              <rect x="0" y="44" width="200" height="8" fill="#e04545" />
+              <rect x="12" y="10" width="52" height="28" fill="#a8c8e8" rx="2" />
+              <rect x="72" y="14" width="36" height="24" fill="#a8c8e8" rx="2" />
+              <polygon points="118,10 150,10 158,38 118,38" fill="#a8c8e8" />
+              <circle cx="42" cy="52" r="14" fill="#e04545" />
+              <rect x="34" y="44" width="16" height="16" fill="#fff" />
+              <circle cx="158" cy="58" r="12" fill="#333" />
+              <circle cx="158" cy="58" r="5" fill="#bbb" />
+              <circle cx="42" cy="58" r="12" fill="#333" />
+              <circle cx="42" cy="58" r="5" fill="#bbb" />
+              <rect x="188" y="48" width="12" height="8" fill="#ffe066" rx="2" />
+            </svg>
+          </div>
+        </div>
+      </section>
+
+      <!-- 结局2-④a：抢救成功 -->
+      <section id="screen-ending-fatigue-success" class="screen screen-ending-fatigue" hidden>
+        <div class="ending-fatigue-panel">
+          <p class="ending-fatigue-line">
+            幸运庇佑了你，经过一番抢救又活了过来
+          </p>
+          <button type="button" id="btn-fatigue-success" class="btn btn--primary">
+            真好！又可以当牛马了！
+          </button>
+        </div>
+      </section>
+
+      <!-- 结局2-④b：抢救失败 -->
+      <section id="screen-ending-fatigue-fail" class="screen screen-ending-fatigue" hidden>
+        <div class="ending-fatigue-panel">
+          <p class="ending-fatigue-line">很遗憾，幸运也不顶用啊</p>
+          <button type="button" id="btn-fatigue-fail-restart" class="btn btn--ghost">
+            重生之我是牛马
+          </button>
+        </div>
+      </section>
+
+      <!-- 一周流程 -->
+      <section id="screen-week" class="screen" hidden>
+        <header class="week-head">
+          <h1 class="week-head__title">本周日程</h1>
+          <p id="mode-source-badge" class="mode-debug mode-debug--week" aria-live="polite"></p>
+          <p id="week-player-line" class="week-head__meta"></p>
+          <div id="week-stats" class="week-stats" aria-label="角色属性"></div>
+        </header>
+
+        <nav id="week-tabs" class="week-tabs" aria-label="星期进度"></nav>
+
+        <div class="event-panel">
+          <p id="event-day-label" class="event-day-label"></p>
+          <p id="event-progress" class="event-progress"></p>
+          <div id="event-card" class="event-card" role="status"></div>
+        </div>
+
+        <p id="event-stat-feedback" class="event-stat-feedback" hidden></p>
+
+        <p id="choice-hint" class="choice-hint" aria-hidden="true"></p>
+        <div id="choice-row" class="choice-row">
+          <button type="button" id="btn-choice-a" class="btn btn--choice"></button>
+          <button type="button" id="btn-choice-b" class="btn btn--choice"></button>
+        </div>
+
+        <button type="button" id="btn-event-next" class="btn btn--primary">下一件</button>
+      </section>
+
+      <!-- 本周汇报 -->
+      <section id="screen-report" class="screen" hidden>
+        <header class="hero hero--compact">
+          <h1 class="hero__title">本周汇报</h1>
+          <p class="hero__subtitle">恭喜你撑过这一周</p>
+        </header>
+
+        <p id="weekly-insight" class="weekly-insight"></p>
+
+        <pre id="report-body" class="report-body"></pre>
+
+        <button type="button" id="btn-report-again" class="btn btn--primary">上瘾了，我要继续！</button>
+        <button type="button" id="btn-report-home" class="btn btn--ghost">我不服，我要重来！</button>
+      </section>
+    </main>
+
+    <div
+      id="day-transition-overlay"
+      class="day-transition"
+      aria-hidden="true"
+    >
+      <p id="day-transition-text" class="day-transition__text"></p>
+    </div>
+
+    <script src="config.js"></script>
+    <script src="weekgen.js"></script>
+    <script src="ai-client.js"></script>
+    <script src="game.js"></script>
+  </body>
+</html>
