@@ -5,7 +5,11 @@
   const DAY_LABELS = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
 
   function hashProfile(p) {
-    const str = [p.name, p.gender, p.industry, String(p.age)].join("|");
+    const tags =
+      Array.isArray(p.personalityTags) && p.personalityTags.length
+        ? [...p.personalityTags].sort().join(",")
+        : "";
+    const str = [p.name, p.gender, p.industry, String(p.age), tags].join("|");
     let h = 2166136261;
     for (let i = 0; i < str.length; i++) {
       h ^= str.charCodeAt(i);
@@ -266,17 +270,106 @@
   }
 
   function clampDelta(n) {
-    return Math.max(-5, Math.min(5, n));
+    return Math.max(-2, Math.min(2, n));
   }
 
-  /** 无选项段：怒气与疲劳二选一，必有非零整数增量 */
-  function rollSingleAxisPlainDelta(rnd) {
-    const mag = 1 + Math.floor(rnd() * 3);
-    const val = clampDelta((rnd() < 0.5 ? 1 : -1) * mag);
-    if (rnd() < 0.5) {
-      return { deltaAnger: val, deltaFatigue: 0 };
+  /** 无选项段：单轴非零；略偏多「恢复」（负 delta）、涨幅以 1 为主，让玩家更耐玩 */
+  function rollSingleAxisPlainDelta(rnd, personalityTags) {
+    const tags = Array.isArray(personalityTags) ? personalityTags : [];
+    let wA = 1;
+    let wF = 1;
+    const angerLean = new Set(["好胜", "较真", "急性子", "焦虑型", "爱吐槽"]);
+    const fatigueLean = new Set(["内向", "敏感", "拖延症", "夜猫子", "社恐", "完美主义"]);
+    for (let i = 0; i < tags.length; i++) {
+      if (angerLean.has(tags[i])) wA += 0.35;
+      if (fatigueLean.has(tags[i])) wF += 0.35;
     }
+    if (tags.includes("佛系")) {
+      wA *= 0.88;
+      wF *= 0.92;
+    }
+    if (tags.includes("乐天派")) wA *= 0.9;
+    if (tags.includes("外向")) wA += 0.12;
+    if (tags.includes("随和")) wF += 0.1;
+    const stress = rnd() < 0.44;
+    const mag = rnd() < 0.82 ? 1 : 2;
+    const val = (stress ? 1 : -1) * mag;
+    const pickAnger = rnd() * (wA + wF) < wA;
+    if (pickAnger) return { deltaAnger: val, deltaFatigue: 0 };
     return { deltaAnger: 0, deltaFatigue: val };
+  }
+
+  /** 按标签追加一句内心戏/反应，增强性格感 */
+  const PERSONALITY_APPEND = {
+    内向: [
+      "NAME 把话咽下去，事后才在心里把台词补全。",
+      "群消息你已读不回，算今日的社交额度用完了。",
+    ],
+    外向: [
+      "NAME 顺口接了一句，场面反而更热闹了。",
+      "你差点把吐槽说出口，又咽成一声干笑。",
+    ],
+    敏感: [
+      "对方一个语气词，NAME 脑内已推演八种含义。",
+      "你怀疑那句「随便」里藏着考核。",
+    ],
+    佛系: [
+      "NAME 默念「算了算了」，像念护身咒。",
+      "你把期待调低，失望就追不上你。",
+    ],
+    好胜: [
+      "NAME 心里不服：这事不能输给自己。",
+      "你嘴上好的，手里已经把下一版想好了。",
+    ],
+    焦虑型: [
+      "NAME 心跳快半拍，像 deadline 在敲门。",
+      "你打开三个标签页查同一件事，求个心安。",
+    ],
+    乐天派: [
+      "NAME 给自己找了个台阶：至少咖啡还行。",
+      "你想，糟归糟，段子素材又有了。",
+    ],
+    完美主义: [
+      "NAME 看不得那个对齐歪了一像素。",
+      "你改到第五遍，仍觉得还能再抠一点。",
+    ],
+    拖延症: [
+      "NAME 把「待会儿」设成默认回复。",
+      "deadline 越近，你擦桌子的手越勤。",
+    ],
+    较真: [
+      "NAME 想追问到底：这逻辑说不通。",
+      "你把条款又读了一遍，标点都不放过。",
+    ],
+    随和: [
+      "NAME 习惯性说行，回头才想起自己也很累。",
+      "你先点头，矛盾留给明天的自己。",
+    ],
+    急性子: [
+      "NAME 等加载圈转完的时间，够你生两轮气。",
+      "你打字速度比对方理解速度快三倍。",
+    ],
+    夜猫子: [
+      "NAME 靠咖啡因与意志力假装是上午。",
+      "你眼睛涩得像砂纸，脑子还在加班。",
+    ],
+    社恐: [
+      "NAME 能打字绝不语音，能语音绝不见面。",
+      "路过茶水间像闯关，成功等于零交流。",
+    ],
+    爱吐槽: [
+      "NAME 内心弹幕已经滚动五百字。",
+      "你面无表情，备忘录里全是梗。",
+    ],
+  };
+
+  function maybeAppendPersonalityLine(story, p, kw, g, dayLabel, tags, rnd, chance) {
+    if (!tags || !tags.length || rnd() >= chance) return story;
+    const t = tags[Math.floor(rnd() * tags.length)];
+    const pool = PERSONALITY_APPEND[t];
+    if (!pool || !pool.length) return story;
+    const line = pool[Math.floor(rnd() * pool.length)];
+    return story + fillTpl(line, p, kw, g, dayLabel);
   }
 
   /** 选项效果：仅一条轴非零；规格写错时兜底 */
@@ -290,7 +383,7 @@
         ? { deltaAnger: da, deltaFatigue: 0 }
         : { deltaAnger: 0, deltaFatigue: df };
     }
-    const v = clampDelta((rnd() < 0.5 ? 1 : -1) * (1 + Math.floor(rnd() * 2)));
+    const v = (rnd() < 0.5 ? 1 : -1) * (rnd() < 0.82 ? 1 : 2);
     return rnd() < 0.5
       ? { deltaAnger: v, deltaFatigue: 0 }
       : { deltaAnger: 0, deltaFatigue: v };
@@ -460,46 +553,59 @@
     "窗外有人笑很大声，你分不清是羡慕还是讽刺。",
   ];
 
+  /** 选项：文案与 effect 对齐（美食/歇口气→疲降，八卦/澄清→怒降，忍气吞声→怒升，硬扛通宵→疲升）；涨幅略克制，让玩家更耐玩。 */
   const CHOICE_SPECS = [
     {
       story: "PEER 把 CRISIS 甩给 NAME：「你熟，你来。」",
       choiceA: "当场怼回去",
       choiceB: "先接下来再说",
-      effectA: { deltaAnger: -2, deltaFatigue: 0 },
-      effectB: { deltaAnger: 2, deltaFatigue: 0 },
-    },
-    {
-      story: "领导让 NAME 周末「抽空」加个班，语气像商量。",
-      choiceA: "委婉拒绝",
-      choiceB: "答应下来",
-      effectA: { deltaAnger: 1, deltaFatigue: 0 },
+      outcomeA: "你把边界划清楚，场面有点僵，但心里那股闷气散了不少。",
+      outcomeB: "活又堆到你桌上，自己的计划只能往后推，越干越乏。",
+      effectA: { deltaAnger: -1, deltaFatigue: 0 },
       effectB: { deltaAnger: 0, deltaFatigue: 2 },
     },
     {
-      story: "TOOL 里两项 deadline 撞车，NAME 只能保一个。",
+      story: "领导让 NAME 周末「抽空」加个班，语气像在商量。",
+      choiceA: "说明周末有事，去不了",
+      choiceB: "答应下来",
+      outcomeA: "周末保住了，能补个觉；领导不太高兴，但你先顾身体。",
+      outcomeB: "连轴两天，肩颈发硬，眼睛酸得睁不开。",
+      effectA: { deltaAnger: 0, deltaFatigue: -2 },
+      effectB: { deltaAnger: 0, deltaFatigue: 2 },
+    },
+    {
+      story: "TOOL 里两个 deadline 撞车，NAME 只能先保一个。",
       choiceA: "保上级看的",
-      choiceB: "保自己负责的",
+      choiceB: "保自己负责那摊",
+      outcomeA: "漂亮那份交了差，另一摊拖到半夜才动，人快熬干。",
+      outcomeB: "你跟上面争了一句，短期清静，心里那口恶气也顺了点。",
       effectA: { deltaAnger: 0, deltaFatigue: 1 },
-      effectB: { deltaAnger: 2, deltaFatigue: 0 },
+      effectB: { deltaAnger: -2, deltaFatigue: 0 },
     },
     {
       story: "午饭搭子吐槽 PEER，问 NAME 站哪边。",
       choiceA: "和稀泥",
       choiceB: "一起吐槽",
-      effectA: { deltaAnger: 0, deltaFatigue: 1 },
-      effectB: { deltaAnger: -2, deltaFatigue: 0 },
+      outcomeA: "两头不讨好，只能忍气吞声，憋着火无处发。",
+      outcomeB: "吐完槽痛快多了，下午见面稍微有点尬，但火头小了。",
+      effectA: { deltaAnger: 2, deltaFatigue: 0 },
+      effectB: { deltaAnger: -1, deltaFatigue: 0 },
     },
     {
       story: "群里有人甩锅，暗指 NAME，你看见了。",
-      choiceA: "公开澄清",
-      choiceB: "私聊说明",
+      choiceA: "公开甩证据",
+      choiceB: "私聊求和",
+      outcomeA: "记录一甩，围观的人闭嘴；你胸口那口气终于出了。",
+      outcomeB: "私聊磨了半天，话术比写报告还累，人快虚脱。",
       effectA: { deltaAnger: -2, deltaFatigue: 0 },
-      effectB: { deltaAnger: 0, deltaFatigue: 1 },
+      effectB: { deltaAnger: 0, deltaFatigue: 2 },
     },
     {
       story: "SCENE 里设备坏了，NAME 被喊去「顺便看看」。",
       choiceA: "推给运维",
       choiceB: "自己折腾",
+      outcomeA: "你推得干脆，有人嘀咕你不积极，听着有点窝火。",
+      outcomeB: "你搞到半夜，说明书翻烂，累瘫在椅子上。",
       effectA: { deltaAnger: 1, deltaFatigue: 0 },
       effectB: { deltaAnger: 0, deltaFatigue: 2 },
     },
@@ -507,41 +613,44 @@
       story: "PEER 要借 NAME 的 TOOL 账号「用一下」。",
       choiceA: "拒绝",
       choiceB: "给只读",
+      outcomeA: "你挡回去了，对方脸色不好看，你心里也有点绷着。",
+      outcomeB: "只读也惹出一串追问，回消息回到手软，人发乏。",
       effectA: { deltaAnger: 1, deltaFatigue: 0 },
-      effectB: { deltaAnger: 0, deltaFatigue: 1 },
+      effectB: { deltaAnger: 0, deltaFatigue: 2 },
     },
     {
-      story: "开会时 NAME 被点名即兴发言，大脑空白。",
-      choiceA: "实话实说还没准备",
+      story: "会上 NAME 被点名即兴发言，大脑一片空白。",
+      choiceA: "实话：还没准备",
       choiceB: "胡诌几句撑过去",
-      effectA: { deltaAnger: 0, deltaFatigue: 1 },
-      effectB: { deltaAnger: 2, deltaFatigue: 0 },
+      outcomeA: "当众露怯有点难堪，只能先忍下来，下来还在赌气。",
+      outcomeB: "瞎编混过去，后背全是汗，又怕穿帮，心里一直吊着。",
+      effectA: { deltaAnger: 1, deltaFatigue: 0 },
+      effectB: { deltaAnger: 1, deltaFatigue: 0 },
     },
     {
-      story: "下班前 PEER 说「改最后一版」，NAME 看着夕阳。",
+      story: "下班前 PEER 说「改最后一版」，NAME 看着窗外天已经暗了。",
       choiceA: "说明天再说",
       choiceB: "今晚改完",
-      effectA: { deltaAnger: 1, deltaFatigue: 0 },
-      effectB: { deltaAnger: 0, deltaFatigue: 3 },
+      outcomeA: "今晚能按时走，身体松一截；对方不太爽，你心里也有点打鼓。",
+      outcomeB: "熬到半夜交稿，人快散架，只想倒头睡。",
+      effectA: { deltaAnger: 0, deltaFatigue: -1 },
+      effectB: { deltaAnger: 0, deltaFatigue: 2 },
     },
     {
-      story: "CRISIS 需要有人背锅，眼神飘向 NAME。",
+      story: "CRISIS 需要有人背锅，眼神往 NAME 身上飘。",
       choiceA: "摆证据",
-      choiceB: "认一部分",
-      effectA: { deltaAnger: -1, deltaFatigue: 0 },
-      effectB: { deltaAnger: 2, deltaFatigue: 0 },
-    },
-    {
-      story: "NAME 发现同事摸鱼却领功，心里不平衡。",
-      choiceA: "找上级反映",
-      choiceB: "忍气吞声",
-      effectA: { deltaAnger: 1, deltaFatigue: 0 },
-      effectB: { deltaAnger: 3, deltaFatigue: 0 },
+      choiceB: "认一部分息事",
+      outcomeA: "锅甩回去一半，你神清气爽，恶气出了。",
+      outcomeB: "咽下委屈换太平，忍气吞声，躺床上还在想，越憋越烦。",
+      effectA: { deltaAnger: -2, deltaFatigue: 0 },
+      effectB: { deltaAnger: 1, deltaFatigue: 0 },
     },
     {
       story: "培训占用晚上，NAME 可以请假或硬上。",
       choiceA: "请假",
       choiceB: "参加",
+      outcomeA: "晚上在家歇着，精神松了一点，不算亏待自己。",
+      outcomeB: "三小时坐下来，头昏脑涨，只想洗澡睡觉。",
       effectA: { deltaAnger: 0, deltaFatigue: -1 },
       effectB: { deltaAnger: 0, deltaFatigue: 2 },
     },
@@ -549,97 +658,62 @@
       story: "客户临时改需求，PEER 让你「配合一下」。",
       choiceA: "要求补排期",
       choiceB: "默默加班赶",
-      effectA: { deltaAnger: 2, deltaFatigue: 0 },
-      effectB: { deltaAnger: 0, deltaFatigue: 3 },
+      outcomeA: "争到重新排期，来回扯皮大半天，人已经乏了。",
+      outcomeB: "通宵怼出来，交差时身体被抽空，心里倒少一桩事。",
+      effectA: { deltaAnger: 0, deltaFatigue: 2 },
+      effectB: { deltaAnger: -1, deltaFatigue: 2 },
     },
     {
       story: "NAME 身体不舒服，手上还有活。",
       choiceA: "请假休息",
       choiceB: "硬撑做完",
+      outcomeA: "躺下睡了一觉，身体缓过来不少。",
+      outcomeB: "撑到交差，眼前发黑，只想关机。",
       effectA: { deltaAnger: 0, deltaFatigue: -2 },
-      effectB: { deltaAnger: 0, deltaFatigue: 3 },
+      effectB: { deltaAnger: 0, deltaFatigue: 2 },
     },
     {
       story: "团建喝酒，有人劝 NAME「给个面子」。",
-      choiceA: "坚决不喝",
+      choiceA: "滴酒不沾",
       choiceB: "抿一口意思",
-      effectA: { deltaAnger: 1, deltaFatigue: 0 },
-      effectB: { deltaAnger: -1, deltaFatigue: 0 },
+      outcomeA: "场面有点冷，你有点尴尬，但胃和脑子都轻松。",
+      outcomeB: "抿一口换太平，胃里辣，人略乏，社交压力小一点。",
+      effectA: { deltaAnger: 0, deltaFatigue: -1 },
+      effectB: { deltaAnger: 0, deltaFatigue: 1 },
     },
     {
       story: "PEER 在领导面前抢功，NAME 在场。",
       choiceA: "当场补充事实",
       choiceB: "会后私聊",
+      outcomeA: "功劳掰清楚，当场痛快，恶气散了。",
+      outcomeB: "会后磨半天，对方打太极，你心力交瘁。",
       effectA: { deltaAnger: -2, deltaFatigue: 0 },
-      effectB: { deltaAnger: 0, deltaFatigue: 1 },
-    },
-    {
-      story: "TOOL 数据异常，NAME 可能是操作问题。",
-      choiceA: "先自查",
-      choiceB: "先甩系统",
-      effectA: { deltaAnger: 0, deltaFatigue: 2 },
-      effectB: { deltaAnger: 2, deltaFatigue: 0 },
-    },
-    {
-      story: "NAME 收到猎头消息，心动又心虚。",
-      choiceA: "聊聊看",
-      choiceB: "直接忽略",
-      effectA: { deltaAnger: -1, deltaFatigue: 0 },
-      effectB: { deltaAnger: 0, deltaFatigue: 1 },
-    },
-    {
-      story: "跨部门扯皮，PEER 让 NAME 去「沟通」。",
-      choiceA: "拉群对线",
-      choiceB: "单独约聊",
-      effectA: { deltaAnger: 2, deltaFatigue: 0 },
-      effectB: { deltaAnger: 0, deltaFatigue: 1 },
-    },
-    {
-      story: "加班餐报销要贴票，NAME 嫌烦。",
-      choiceA: "不报了",
-      choiceB: "慢慢贴",
-      effectA: { deltaAnger: 2, deltaFatigue: 0 },
       effectB: { deltaAnger: 0, deltaFatigue: 2 },
     },
     {
-      story: "领导表扬团队，没提 NAME，你也在场。",
-      choiceA: "笑笑算了",
-      choiceB: "会后委婉提醒",
-      effectA: { deltaAnger: 2, deltaFatigue: 0 },
-      effectB: { deltaAnger: 0, deltaFatigue: 1 },
+      story: "TOOL 数据异常，NAME 被指可能是操作问题。",
+      choiceA: "先自查",
+      choiceB: "先甩给系统",
+      outcomeA: "查到眼酸，终于证明自己清白，人累坏了，气顺了。",
+      outcomeB: "嘴快甩锅，暂时脱身，心里发虚，又怕被人记一笔。",
+      effectA: { deltaAnger: -1, deltaFatigue: 2 },
+      effectB: { deltaAnger: 1, deltaFatigue: 0 },
     },
     {
       story: "DAY 系统维护，NAME 的工作流断了。",
-      choiceA: "摸鱼等恢复",
-      choiceB: "找替代方案",
+      choiceA: "等恢复再说",
+      choiceB: "找替代方案硬干",
+      outcomeA: "空档里喝了水、回了消息，紧绷的神经松了一点。",
+      outcomeB: "绕路干活多费一倍劲，收工时胳膊都酸。",
       effectA: { deltaAnger: 0, deltaFatigue: -1 },
       effectB: { deltaAnger: 0, deltaFatigue: 2 },
-    },
-    {
-      story: "PEER 求 NAME 替开一次会。",
-      choiceA: "拒绝",
-      choiceB: "帮忙去",
-      effectA: { deltaAnger: 1, deltaFatigue: 0 },
-      effectB: { deltaAnger: 0, deltaFatigue: 2 },
-    },
-    {
-      story: "NAME 发现排期被悄悄往前挪了一天。",
-      choiceA: "群里质问",
-      choiceB: "私聊协调",
-      effectA: { deltaAnger: 2, deltaFatigue: 0 },
-      effectB: { deltaAnger: 0, deltaFatigue: 1 },
-    },
-    {
-      story: "SCENE 空调太冷，NAME 瑟瑟发抖。",
-      choiceA: "忍",
-      choiceB: "去关小点",
-      effectA: { deltaAnger: 0, deltaFatigue: 1 },
-      effectB: { deltaAnger: 1, deltaFatigue: 0 },
     },
     {
       story: "下班电梯里领导问 NAME「最近累吗」。",
       choiceA: "说不累",
       choiceB: "实话有点累",
+      outcomeA: "场面话圆过去，出电梯有点憋，但少惹一句追问。",
+      outcomeB: "难得说实话，对方愣了一下，你反倒轻松一点。",
       effectA: { deltaAnger: 1, deltaFatigue: 0 },
       effectB: { deltaAnger: -1, deltaFatigue: 0 },
     },
@@ -670,6 +744,16 @@
         const sec = PLAIN_SECOND[Math.floor(rnd() * PLAIN_SECOND.length)];
         story += fillTpl(sec, p, kw, g, dayLabel);
       }
+      story = maybeAppendPersonalityLine(
+        story,
+        p,
+        kw,
+        g,
+        dayLabel,
+        p.personalityTags,
+        rnd,
+        0.42,
+      );
       fp = fingerprintStory(story);
       if (!usedFp.has(fp)) {
         usedFp.add(fp);
@@ -692,7 +776,7 @@
         String(Math.floor(rnd() * 1e9));
       usedFp.add(fingerprintStory(story));
     }
-    const axis = rollSingleAxisPlainDelta(rnd);
+    const axis = rollSingleAxisPlainDelta(rnd, p.personalityTags);
     return {
       eventType: "plain",
       story,
@@ -723,6 +807,16 @@
       story += "（段" + slot + "）";
       usedFp.add(fingerprintStory(story + spec.choiceA + spec.choiceB));
     }
+    story = maybeAppendPersonalityLine(
+      story,
+      p,
+      kw,
+      g,
+      dayLabel,
+      p.personalityTags,
+      rnd,
+      0.48,
+    );
     const ea = singleAxisEffectFromSpec(spec.effectA, rnd);
     const eb = singleAxisEffectFromSpec(spec.effectB, rnd);
     return {
@@ -730,6 +824,8 @@
       story,
       choiceA: spec.choiceA,
       choiceB: spec.choiceB,
+      outcomeA: typeof spec.outcomeA === "string" ? spec.outcomeA : "",
+      outcomeB: typeof spec.outcomeB === "string" ? spec.outcomeB : "",
       effectA: ea,
       effectB: eb,
     };

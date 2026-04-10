@@ -126,6 +126,59 @@
             </select>
           </div>
 
+          <div class="field">
+            <span class="label-text">性格标签（可选，最多 3 个）</span>
+            <p class="field-hint">会影响本周事件的语气与走向；可不选。</p>
+            <div class="radio-row personality-tags" role="group" aria-label="性格标签">
+              <label class="chip"
+                ><input type="checkbox" name="personality" value="内向" /> <span>内向</span></label
+              >
+              <label class="chip"
+                ><input type="checkbox" name="personality" value="外向" /> <span>外向</span></label
+              >
+              <label class="chip"
+                ><input type="checkbox" name="personality" value="敏感" /> <span>敏感</span></label
+              >
+              <label class="chip"
+                ><input type="checkbox" name="personality" value="佛系" /> <span>佛系</span></label
+              >
+              <label class="chip"
+                ><input type="checkbox" name="personality" value="好胜" /> <span>好胜</span></label
+              >
+              <label class="chip"
+                ><input type="checkbox" name="personality" value="焦虑型" /> <span>焦虑型</span></label
+              >
+              <label class="chip"
+                ><input type="checkbox" name="personality" value="乐天派" /> <span>乐天派</span></label
+              >
+              <label class="chip"
+                ><input type="checkbox" name="personality" value="完美主义" />
+                <span>完美主义</span></label
+              >
+              <label class="chip"
+                ><input type="checkbox" name="personality" value="拖延症" /> <span>拖延症</span></label
+              >
+              <label class="chip"
+                ><input type="checkbox" name="personality" value="较真" /> <span>较真</span></label
+              >
+              <label class="chip"
+                ><input type="checkbox" name="personality" value="随和" /> <span>随和</span></label
+              >
+              <label class="chip"
+                ><input type="checkbox" name="personality" value="急性子" /> <span>急性子</span></label
+              >
+              <label class="chip"
+                ><input type="checkbox" name="personality" value="夜猫子" /> <span>夜猫子</span></label
+              >
+              <label class="chip"
+                ><input type="checkbox" name="personality" value="社恐" /> <span>社恐</span></label
+              >
+              <label class="chip"
+                ><input type="checkbox" name="personality" value="爱吐槽" /> <span>爱吐槽</span></label
+              >
+            </div>
+          </div>
+
           <p id="setup-error" class="form-error" role="alert" hidden></p>
 
           <button type="submit" class="btn btn--primary">开启</button>
@@ -157,11 +210,15 @@
               <dt>行业</dt>
               <dd id="summary-industry">—</dd>
             </div>
+            <div>
+              <dt>性格标签</dt>
+              <dd id="summary-personality">—</dd>
+            </div>
           </dl>
         </div>
 
         <div class="summary-card summary-card--stats">
-          <p class="stats-cap-hint">属性上限均为 10；以下为开局随机结果。</p>
+          <p class="stats-cap-hint">属性上限均为 10；能力与幸运为开局随机，怒气与疲劳从 0 开始。</p>
           <dl class="stats-grid">
             <div>
               <dt>能力</dt>
@@ -194,10 +251,10 @@
       <section id="screen-ending-rage" class="screen screen-ending-rage" hidden>
         <div class="ending-rage-panel">
           <p id="ending-rage-burst" class="ending-rage-burst" aria-live="assertive">
-            老子不干了！！！
+            啊啊啊！！！
           </p>
           <button type="button" id="btn-ending-resign" class="btn btn--danger">
-            辞职！必须辞！
+            辞职！现在！立刻！马上！
           </button>
         </div>
       </section>
@@ -212,7 +269,7 @@
             class="btn btn--primary"
             hidden
           >
-            换个地方当牛马吧
+            算了，还是继续去当牛马吧……
           </button>
         </div>
       </section>
@@ -285,7 +342,7 @@
       <section id="screen-ending-fatigue-success" class="screen screen-ending-fatigue" hidden>
         <div class="ending-fatigue-panel">
           <p class="ending-fatigue-line">
-            幸运庇佑了你，经过一番抢救又活了过来
+            幸运启动！经过一番抢救又活了过来
           </p>
           <button type="button" id="btn-fatigue-success" class="btn btn--primary">
             真好！又可以当牛马了！

@@ -169,6 +169,14 @@ body {
   color: var(--muted);
 }
 
+.field-hint {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--muted);
+  opacity: 0.92;
+  line-height: 1.4;
+}
+
 .field input[type="text"],
 .field input[type="number"],
 .field select {
@@ -244,6 +252,11 @@ body {
   color: var(--text);
   background: var(--accent-soft);
   border-color: rgba(201, 162, 39, 0.45);
+}
+
+.chip input:disabled + span {
+  opacity: 0.38;
+  cursor: not-allowed;
 }
 
 .form-error {
@@ -525,6 +538,7 @@ body {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
+  white-space: pre-line;
 }
 
 /* AI 按天拉取事件时隐藏本周 UI，避免透过过渡层看到「生成中」或上一段内容 */

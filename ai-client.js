@@ -86,8 +86,8 @@
   var STORY_HARD_MAX_CHARS = 320;
   /** 智能截断时，句读处至少保留这么长才采用（避免只剩半句话） */
   var STORY_MIN_BREAK_LEN = 12;
-  var DELTA_MIN = -5;
-  var DELTA_MAX = 5;
+  var DELTA_MIN = -2;
+  var DELTA_MAX = 2;
 
   /**
    * 将 story 限制在 STORY_HARD_MAX_CHARS 以内；超长时优先在句末（。！？；）截断，其次逗号类，最后硬截断。
@@ -151,6 +151,13 @@
     return enforceSingleAxisDeltas(parseIntDelta(o.deltaAnger, 0), parseIntDelta(o.deltaFatigue, 0));
   }
 
+  function normalizeOutcomeText(v) {
+    if (v === undefined || v === null) return "";
+    var t = String(v).trim();
+    if (t.length > 480) return t.slice(0, 480) + "…";
+    return t;
+  }
+
   function normalizeEventType(et) {
     if (typeof et !== "string") return "";
     var t = et.trim().toLowerCase();
@@ -175,6 +182,8 @@
         eventType: "choice",
         choiceA: pair.a,
         choiceB: pair.b,
+        outcomeA: normalizeOutcomeText(obj.outcomeA || obj.outcome_a),
+        outcomeB: normalizeOutcomeText(obj.outcomeB || obj.outcome_b),
         effectA: effectA,
         effectB: effectB,
       };
@@ -246,7 +255,15 @@
 
   function buildDayBatchPrompt(player, ctx) {
     var lines = [];
-    lines.push("你是文字游戏《我的牛马生涯》的叙事引擎，风格：职场荒诞、自嘲、冷幽默，简体中文。");
+    lines.push(
+      "你是文字游戏《我的牛马生涯》的叙事引擎。**故事必须写现实职场与各行各业日常**（办公室、工地、门店、医院、学校等真实场景），禁止修仙、玄幻、法术、宗门等设定；人名地名为现实风格。",
+    );
+    lines.push(
+      "【属性与剧情的常识映射】必须让**事件正文与 delta 一眼能对上**，避免「故事很治愈数值却在狂涨」。示例（写进 story，再选对应一轴）：吃好饭/喝奶茶/午休眯一会→**疲劳降**；听八卦、同事一起吐槽、误会澄清、小胜利→**怒气降**；忍气吞声、被甩锅、被怼、憋火→**怒气升**；接了不可能的任务、通宵、连轴会、奔波跑腿→**疲劳升**；失眠、头疼、感冒硬撑→**疲劳升**。",
+    );
+    lines.push(
+      "【数值节奏】怒气/疲劳变化**只允许 ±1 或 ±2**（禁止 ±3 及以上）。其中 **±1 应占绝大多数（约八成）**，**±2 较少（约两成）**，且须与剧情强度匹配（小别扭用 ±1，通宵、大吵等才用 ±2）。宜有约一半段落为下降，避免连续猛涨。",
+    );
     lines.push("");
     lines.push("【固定角色】");
     lines.push(
@@ -269,6 +286,19 @@
         " / " +
         player.fatigue,
     );
+    var pTags = Array.isArray(player.personalityTags)
+      ? player.personalityTags.filter(function (t) {
+          return t && String(t).trim();
+        })
+      : [];
+    if (pTags.length) {
+      lines.push(
+        "性格标签（0～3 个，影响叙事语气、内心反应与冲突处理方式；勿在正文直接罗列标签名）：" +
+          pTags.join("、"),
+      );
+    } else {
+      lines.push("性格标签：未指定（按普通打工人写即可）。");
+    }
     lines.push("");
     lines.push(
       "【本日任务】一次性生成「" +
@@ -304,17 +334,17 @@
         " 段（选择占多数）。输出前请逐条核对 eventType 并计数；plain 仅写 deltaAnger/deltaFatigue，勿把无选项段标成 choice。",
     );
     lines.push(
-      "① plain：eventType:\"plain\"，无选项；必须给 deltaAnger、deltaFatigue（整数，通常 ±1～±3）。**铁律：每一维里恰好只有一个非零**，要么只改怒气，要么只改疲劳，禁止两条同时非零，也禁止两条都是 0（与剧情一致；0～10 封顶由前端截断）。玩家看到正文时即结算。",
+      "① plain：eventType:\"plain\"，无选项；deltaAnger、deltaFatigue 为 **±1 或 ±2 之一轴非零**（以 ±1 为主）。**story 里要写出为何涨或跌**，强度与数字一致。玩家看到正文时即结算。",
     );
     lines.push(
-      "② choice：eventType:\"choice\"，给 choiceA、choiceB（各 4～10 字），并给 effectA、effectB；**每个 effect 同样铁律：deltaAnger 与 deltaFatigue 恰好一轴非零**，禁止双非零或双零。冲突/施压/甩锅类优先用 choice。",
+      "② choice：除 choiceA、choiceB、effectA、effectB 外，**必须给 outcomeA、outcomeB**（各一段，约 40～120 字）：写清身心变化，**须与 effect 一致**；两选项尽量一缓一耗或一升一降，避免两边都大幅加怒/加疲。**每个 effect：deltaAnger 与 deltaFatigue 恰好一轴非零**，可正可负，禁止双非零或双零。",
     );
     lines.push(
       "每条 story 请写完整、可读的一句话或小段，**建议约 " +
         STORY_GUIDE_CHARS +
         " 字以内**；**总长不得超过 " +
         STORY_HARD_MAX_CHARS +
-        " 个字符**（含标点与空格）。勿写半句、勿在句中戛然而止；数值须与剧情一致，且**每条只体现一条轴**（如受气增怒气、连轴转增疲劳、放松减负等，二选一写进非零的那一维）。",
+        " 个字符**（含标点与空格）。勿写半句、勿在句中戛然而止；数值须与剧情一致，且**每条只体现一条轴**。",
     );
     lines.push("");
     if (ctx.isSundayBatch) {
@@ -333,7 +363,7 @@
     }
     lines.push("【输出格式】只输出一个 JSON，不要 markdown。示例（字段名必须一致）：");
     lines.push(
-      '{"segments":[{"eventType":"plain","story":"早高峰地铁挤到变形，你贴着门站成薄片，耳机里播着励志歌，心里在算迟到扣款。","deltaAnger":2,"deltaFatigue":0},{"eventType":"choice","story":"主管在会上把锅甩向你，全场安静。","choiceA":"据理力争","choiceB":"先认下再说","effectA":{"deltaAnger":-1,"deltaFatigue":0},"effectB":{"deltaAnger":0,"deltaFatigue":2}}]}',
+      '{"segments":[{"eventType":"plain","story":"早高峰地铁挤到变形，你贴着门站成薄片，耳机里播着励志歌，心里在算迟到扣款。","deltaAnger":2,"deltaFatigue":0},{"eventType":"choice","story":"主管在会上把锅甩向你，全场安静。","choiceA":"据理力争","choiceB":"先认下再说","outcomeA":"你当场拆穿逻辑漏洞，同事侧目；嗓子喊哑了，但胸口那口恶气出了大半。","outcomeB":"你先咽下这口气，散会后在工位闷着；活还是落到你头上，越干越乏。","effectA":{"deltaAnger":-1,"deltaFatigue":0},"effectB":{"deltaAnger":0,"deltaFatigue":2}}]}',
     );
     lines.push("segments 内对象顺序 = 当天时间从早到晚的顺序。");
     return lines.join("\n");
@@ -436,7 +466,7 @@
           {
             role: "system",
             content:
-              "只输出合法 JSON：segments 数组；plain 含 story(建议充实、总长≤320字符)、deltaAnger、deltaFatigue（怒气与疲劳恰好一轴非零）；choice 另含 choiceA、choiceB、effectA、effectB（每个 effect 同样一轴非零）。简体中文。",
+              "只输出合法 JSON：segments 数组；plain 含 story、deltaAnger、deltaFatigue（±1 或 ±2，恰好一轴非零，以 ±1 为主）；choice 另含 choiceA、choiceB、outcomeA、outcomeB、effectA、effectB（同上）。简体中文。",
           },
           { role: "user", content: prompt },
         ],
@@ -528,7 +558,7 @@
       isSundayBatch: dayIndex === 6,
     });
 
-    var maxTok = Math.min(4096, 900 + eventCount * 520);
+    var maxTok = Math.min(4096, 960 + eventCount * 580);
 
     var chain;
     if (s.useServerProxy) {

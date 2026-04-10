@@ -26,6 +26,7 @@
   const summaryGender = document.getElementById("summary-gender");
   const summaryAge = document.getElementById("summary-age");
   const summaryIndustry = document.getElementById("summary-industry");
+  const summaryPersonality = document.getElementById("summary-personality");
   const summaryAbility = document.getElementById("summary-ability");
   const summaryLuck = document.getElementById("summary-luck");
   const summaryAnger = document.getElementById("summary-anger");
@@ -165,8 +166,11 @@
   /** @type {Array<{dayIndex:number,segmentIndex:number,dayLabel:string,picked:string,label:string}>} */
   var choiceLog = [];
   var pendingChoices = null;
-  /** @type {null | 'choice' | 'plain'} */
+  /** @type {null | 'choice' | 'plain' | 'choiceOutcome'} */
   var pendingSegmentKind = null;
+  /** 选择后：结果页文案 + 已结算的属性变化展示 */
+  /** @type {null | { outcomeText: string, statLine: string }} */
+  var pendingChoiceOutcome = null;
   /** @type {null | { text: string | null }} */
   var aiFeedbackState = null;
   /** plain 段结算后已满怒/满疲劳时，先展示事件再点「继续」进结局 */
@@ -220,8 +224,8 @@
     return {
       ability: randInt(1, 10),
       luck: randInt(1, 10),
-      anger: randInt(0, 5),
-      fatigue: randInt(0, 5),
+      anger: 0,
+      fatigue: 0,
     };
   }
 
@@ -246,8 +250,54 @@
     );
   }
 
-  /** @type {{ name: string, gender: string, age: number, industry: string, ability: number, luck: number, anger: number, fatigue: number } | null} */
+  /** @type {{ name: string, gender: string, age: number, industry: string, personalityTags: string[], ability: number, luck: number, anger: number, fatigue: number } | null} */
   let player = null;
+
+  const PERSONALITY_TAG_ALL = [
+    "内向",
+    "外向",
+    "敏感",
+    "佛系",
+    "好胜",
+    "焦虑型",
+    "乐天派",
+    "完美主义",
+    "拖延症",
+    "较真",
+    "随和",
+    "急性子",
+    "夜猫子",
+    "社恐",
+    "爱吐槽",
+  ];
+
+  function getPersonalityTagsFromForm() {
+    if (!form) return [];
+    return Array.from(form.querySelectorAll('input[name="personality"]:checked'))
+      .map(function (el) {
+        return el.value;
+      })
+      .sort();
+  }
+
+  function updatePersonalityTagLimit() {
+    if (!form) return;
+    const boxes = form.querySelectorAll('input[name="personality"]');
+    const checked = Array.from(boxes).filter(function (b) {
+      return b.checked;
+    });
+    const n = checked.length;
+    boxes.forEach(function (b) {
+      b.disabled = !b.checked && n >= 3;
+    });
+  }
+
+  if (form) {
+    form.querySelectorAll('input[name="personality"]').forEach(function (el) {
+      el.addEventListener("change", updatePersonalityTagLimit);
+    });
+    updatePersonalityTagLimit();
+  }
   /** @type {{ days: string[][], seed: number, dayLabels: string[], mode?: string } | null} */
   let weekData = null;
   let weekSeedExtra = 0;
@@ -370,17 +420,25 @@
     if (!endingRageTypewriter || !btnEndingRestart) return;
     var el = endingRageTypewriter;
     var btn = btnEndingRestart;
-    var line1Base = "既然这样";
-    var line2Base = "那就";
+    /** 正文来源：config.js → window.GAME_ENDING_RAGE_TYPEWRITER_LINES */
+    var lib = window.GAME_ENDING_RAGE_TYPEWRITER_LINES;
+    var lines = [];
+    if (Array.isArray(lib)) {
+      for (var li = 0; li < lib.length; li++) {
+        var s = String(lib[li] == null ? "" : lib[li]).trim();
+        if (s) lines.push(s);
+      }
+    }
+    if (!lines.length) lines = ["于是", "那就"];
     /** 正文打字：单字间隔（毫秒） */
-    var delayMin = 300;
-    var delayMax = 300;
-    /** 第一行「……」点阵动画结束 → 换行 → 打第二行正文 之间的停顿 */
+    var delayMin = 200;
+    var delayMax = 200;
+    /** 一段「……」点阵结束 → 换行 → 打下一段 之间的停顿 */
     var pauseBetweenLines = 1000;
     /** 「……」处：1～6 个点循环动画总时长（约 2 秒） */
-    var ellipsisDotCycleMs = 1800;
-    /** 「那就……」全文定稿后，再过这么久才显示「换个地方当牛马吧」 */
-    var delayBeforeShowRestartBtn = 1800;
+    var ellipsisDotCycleMs = 1000;
+    /** 全文定稿后，再过这么久才显示「换个地方当牛马吧」 */
+    var delayBeforeShowRestartBtn = 1000;
     el.textContent = "";
     btn.hidden = true;
 
@@ -416,21 +474,29 @@
       tick();
     }
 
-    typeBaseChars(Array.from(line1Base), "", function () {
-      runEllipsisDotCycle(line1Base, function () {
-        setTimeout(function () {
-          el.textContent = line1Base + "……\n";
-          typeBaseChars(Array.from(line2Base), line1Base + "……\n", function () {
-            runEllipsisDotCycle(line1Base + "……\n" + line2Base, function () {
-              el.textContent = line1Base + "……\n" + line2Base + "……";
-              setTimeout(function () {
-                btn.hidden = false;
-              }, delayBeforeShowRestartBtn);
-            });
-          });
-        }, pauseBetweenLines);
+    function runSegment(segIndex, accumulatedPrefix) {
+      if (segIndex >= lines.length) return;
+      var line = lines[segIndex];
+      var isLast = segIndex === lines.length - 1;
+      typeBaseChars(Array.from(line), accumulatedPrefix, function () {
+        runEllipsisDotCycle(accumulatedPrefix + line, function () {
+          if (isLast) {
+            el.textContent = accumulatedPrefix + line + "……";
+            setTimeout(function () {
+              btn.hidden = false;
+            }, delayBeforeShowRestartBtn);
+            return;
+          }
+          setTimeout(function () {
+            var nextPrefix = accumulatedPrefix + line + "……\n";
+            el.textContent = nextPrefix;
+            runSegment(segIndex + 1, nextPrefix);
+          }, pauseBetweenLines);
+        });
       });
-    });
+    }
+
+    runSegment(0, "");
   }
 
   function validateAge(raw) {
@@ -488,12 +554,19 @@
       return;
     }
 
+    const personalityTags = getPersonalityTagsFromForm();
+    if (personalityTags.length > 3) {
+      showError("性格标签最多选择 3 个。");
+      return;
+    }
+
     var stats = rollInitialStats();
     player = {
       name,
       gender: getGender(),
       age,
       industry: industrySelect.value,
+      personalityTags: personalityTags,
       ability: stats.ability,
       luck: stats.luck,
       anger: stats.anger,
@@ -504,6 +577,9 @@
     summaryGender.textContent = player.gender;
     summaryAge.textContent = String(age);
     summaryIndustry.textContent = player.industry;
+    if (summaryPersonality) {
+      summaryPersonality.textContent = personalityTags.length ? personalityTags.join("、") : "未选";
+    }
     summaryAbility.textContent = stats.ability + " / " + STAT_MAX;
     summaryLuck.textContent = stats.luck + " / " + STAT_MAX;
     summaryAnger.textContent = stats.anger + " / " + STAT_MAX;
@@ -514,6 +590,7 @@
   });
 
   btnBackSetup.addEventListener("click", function () {
+    updatePersonalityTagLimit();
     showScreen("setup");
   });
 
@@ -534,6 +611,7 @@
     choiceLog = [];
     pendingChoices = null;
     pendingSegmentKind = null;
+    pendingChoiceOutcome = null;
     pendingPlainEnding = null;
     aiFeedbackState = null;
     aiLoading = false;
@@ -574,6 +652,7 @@
     choiceLog = [];
     pendingChoices = null;
     pendingSegmentKind = null;
+    pendingChoiceOutcome = null;
     pendingPlainEnding = null;
     aiFeedbackState = null;
     aiLoading = false;
@@ -623,6 +702,7 @@
     if (!seg) return false;
     pendingPlainEnding = null;
     aiFeedbackState = null;
+    pendingChoiceOutcome = null;
     if (eventStatFeedback) {
       eventStatFeedback.hidden = true;
       eventStatFeedback.textContent = "";
@@ -656,6 +736,7 @@
     setWeekAiLoadingUi(false);
 
     aiFeedbackState = null;
+    pendingChoiceOutcome = null;
     if (eventStatFeedback) {
       eventStatFeedback.hidden = true;
       eventStatFeedback.textContent = "";
@@ -823,6 +904,26 @@
       eventProgress.hidden = true;
       eventProgress.textContent = "";
     }
+
+    if (pendingChoiceOutcome) {
+      eventCard.textContent = pendingChoiceOutcome.outcomeText || "";
+      if (eventStatFeedback) {
+        if (pendingChoiceOutcome.statLine) {
+          eventStatFeedback.hidden = false;
+          eventStatFeedback.textContent = "【属性变化】" + pendingChoiceOutcome.statLine;
+        } else {
+          eventStatFeedback.hidden = true;
+          eventStatFeedback.textContent = "";
+        }
+      }
+      setChoiceUiVisible(false);
+      btnEventNext.hidden = false;
+      btnEventNext.textContent = "继续";
+      btnEventNext.disabled = false;
+      renderWeekTabs();
+      return;
+    }
+
     eventCard.textContent = text || "";
 
     if (aiFeedbackState && eventStatFeedback) {
@@ -873,6 +974,7 @@
     }
     pendingPlainEnding = null;
     aiFeedbackState = null;
+    pendingChoiceOutcome = null;
     if (eventStatFeedback) {
       eventStatFeedback.hidden = true;
       eventStatFeedback.textContent = "";
@@ -905,6 +1007,7 @@
     if (!weekData || !isSegmentWeek() || !pendingChoices || aiLoading) return;
     if (pendingSegmentKind !== "choice") return;
     if (aiFeedbackState) return;
+    if (pendingChoiceOutcome) return;
 
     var d = currentDayIndex;
     var i = currentEventIndex;
@@ -928,38 +1031,30 @@
 
     var line = applyAngerFatigueFromDeltas(da, df);
     weekStatsEl.textContent = formatStatsLine(player);
-    var choiceEnding =
-      player.anger >= STAT_MAX ? "rage" : player.fatigue >= STAT_MAX ? "fatigue" : null;
+
+    var outcomeRaw =
+      key === "A"
+        ? seg.outcomeA !== undefined && seg.outcomeA !== null
+          ? String(seg.outcomeA).trim()
+          : ""
+        : seg.outcomeB !== undefined && seg.outcomeB !== null
+          ? String(seg.outcomeB).trim()
+          : "";
+    var outcomeText =
+      outcomeRaw ||
+      "你选了「" +
+        label +
+        "」。事情就这样落了地——有得有失，明天还得接着干。";
 
     pendingChoices = null;
-    pendingSegmentKind = null;
-    setChoiceUiVisible(false);
-
-    if (choiceEnding === "rage") {
-      pendingPlainEnding = null;
-      aiFeedbackState = null;
-      if (eventStatFeedback) {
-        eventStatFeedback.hidden = true;
-        eventStatFeedback.textContent = "";
-      }
-      enterEndingRageScreen();
-      return;
-    }
-    if (choiceEnding === "fatigue") {
-      pendingPlainEnding = null;
-      aiFeedbackState = null;
-      if (eventStatFeedback) {
-        eventStatFeedback.hidden = true;
-        eventStatFeedback.textContent = "";
-      }
-      enterEndingFatigueScreen();
-      return;
-    }
-
+    pendingSegmentKind = "choiceOutcome";
+    aiFeedbackState = null;
     pendingPlainEnding = null;
-    aiFeedbackState = line
-      ? { text: "【属性变化】" + line }
-      : { text: null };
+    pendingChoiceOutcome = {
+      outcomeText: outcomeText,
+      statLine: line,
+    };
+    setChoiceUiVisible(false);
     renderAiEventDisplay();
   }
 
@@ -1000,6 +1095,24 @@
       if (aiError) {
         aiError = false;
         loadWeekSegment();
+        return;
+      }
+      if (pendingChoiceOutcome) {
+        pendingChoiceOutcome = null;
+        pendingSegmentKind = null;
+        if (eventStatFeedback) {
+          eventStatFeedback.hidden = true;
+          eventStatFeedback.textContent = "";
+        }
+        if (player.anger >= STAT_MAX) {
+          enterEndingRageScreen();
+          return;
+        }
+        if (player.fatigue >= STAT_MAX) {
+          enterEndingFatigueScreen();
+          return;
+        }
+        advanceAfterAiSegment(null);
         return;
       }
       if (aiFeedbackState) {
@@ -1129,6 +1242,31 @@
     if (industries.length) {
       industrySelect.value = industries[randInt(0, industries.length - 1)];
     }
+
+    var pBoxes = form.querySelectorAll('input[name="personality"]');
+    for (var pi = 0; pi < pBoxes.length; pi++) {
+      pBoxes[pi].checked = false;
+    }
+    var nTags = randInt(0, 3);
+    if (nTags > 0) {
+      var tagCopy = PERSONALITY_TAG_ALL.slice();
+      for (var tj = tagCopy.length - 1; tj > 0; tj--) {
+        var rj = randInt(0, tj);
+        var swap = tagCopy[tj];
+        tagCopy[tj] = tagCopy[rj];
+        tagCopy[rj] = swap;
+      }
+      for (var tk = 0; tk < nTags; tk++) {
+        var want = tagCopy[tk];
+        for (var pi2 = 0; pi2 < pBoxes.length; pi2++) {
+          if (pBoxes[pi2].value === want) {
+            pBoxes[pi2].checked = true;
+            break;
+          }
+        }
+      }
+    }
+    updatePersonalityTagLimit();
 
     clearError();
   }
