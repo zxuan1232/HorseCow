@@ -656,6 +656,12 @@ body {
   overflow: auto;
 }
 
+.report-glimpse.report-glimpse--loading {
+  color: var(--accent);
+  text-shadow: 0 0 24px rgba(201, 162, 39, 0.28);
+  animation: dayTransitionBreath 2.2s ease-in-out infinite;
+}
+
 .report-body {
   margin: 0 0 0.75rem;
   padding: 1rem 1.1rem;

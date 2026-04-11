@@ -243,8 +243,9 @@
       }
     }
     var storySoFar = storyParts.join("\n");
-    if (storySoFar.length > 2800) {
-      storySoFar = "…（更早剧情省略）\n" + storySoFar.slice(-2800);
+    /** 略增保留量，减轻后半周生成时丢失周初剧情、导致模型重复同类桥段 */
+    if (storySoFar.length > 3800) {
+      storySoFar = "…（更早剧情省略）\n" + storySoFar.slice(-3800);
     }
     var choicesSoFar = choiceParts.join("\n");
     if (choicesSoFar.length > 2000) {
@@ -359,6 +360,20 @@
         " 个字符**（含标点与空格）。勿写半句、勿在句中戛然而止；数值须与剧情一致，且**每条只体现一条轴**。",
     );
     lines.push("");
+    lines.push("【去重与多样性】");
+    lines.push(
+      "· **本日各条之间**：每条须有不同场景或不同矛盾焦点；避免多条都围绕「开会」「改需求」「被催」「摸鱼被抓」「电梯/走廊偶遇领导」等同质桥段；从早到晚尽量覆盖通勤、工位、协作、对外（客户/供应商/家长等）、后勤行政、收工等不同侧面。",
+    );
+    if (ctx.storySoFar) {
+      lines.push(
+        "· **本周跨日**：下方「本周此前已发生」已列出更早剧情；本日每条须**避免**与其中事件在核心冲突、场景类型、具体梗上高度雷同（若前几日已写过同类会议室甩锅、同类客户电话、同类系统崩了，本日换其他事由与场景）；可延续人物关系与情绪线，但**具体事件须有新事因或新转折**，勿换皮重复。",
+      );
+    } else {
+      lines.push(
+        "· **本周首日**：尚无更早剧情；本日内仍须遵守上条，避免同日多条叙事套路雷同。",
+      );
+    }
+    lines.push("");
     if (ctx.isSundayBatch) {
       lines.push("【周日】最后一条可收束全周情绪，可用 plain 或 choice 收尾。");
       lines.push("");
@@ -463,9 +478,9 @@
   }
 
   var SYSTEM_JSON_SEGMENTS =
-    "只输出合法 JSON：segments 数组；plain 含 story、deltaAnger、deltaFatigue（±1 或 ±2，恰好一轴非零，以 ±1 为主）；choice 另含 choiceA、choiceB、outcomeA、outcomeB、effectA、effectB（同上）。story/outcome 须以第二人称「你」叙述。简体中文。";
+    "只输出合法 JSON：segments 数组；plain 含 story、deltaAnger、deltaFatigue（±1 或 ±2，恰好一轴非零，以 ±1 为主）；choice 另含 choiceA、choiceB、outcomeA、outcomeB、effectA、effectB（同上）。story/outcome 须以第二人称「你」叙述。同一日内各条与跨日剧情避免同质重复。简体中文。";
   var SYSTEM_PLAIN_TEXT =
-    "只输出用户任务要求的正文：简体中文；不要代码块与 markdown 围栏；不要 JSON；不要任何前言、标题或括号说明。";
+    "只输出用户任务要求的正文：简体中文；不要代码块与 markdown 围栏；不要 JSON；不要任何前言、标题或括号说明。若任务为短诗，语气宜真诚、可有温度与共鸣感，勿说教。";
 
   function callOpenAICompatible(baseUrl, apiKey, model, prompt, maxTokens, usePlainSystem) {
     var mt = typeof maxTokens === "number" ? maxTokens : 1024;
@@ -626,7 +641,8 @@
       "你是《牛马的一周》周报诗人。请**只根据**下方「本周经历摘要」写一首短诗，用于「本周掠影」栏目。",
       "要求：",
       "· 共 8～14 行为宜；现代诗或仿古体（如七言截句、词味、乐府感）均可；",
-      "· 必须用第二人称「你」，与摘要中的情绪、场景呼应；",
+      "· 必须用第二人称「你」，与摘要中的情绪、场景**如实呼应**；在概括本周酸甜苦辣的同时，**落笔带一点温度**：可写微光、释然、笨拙的坚持、自嘲里的轻松，或安静的无评判的陪伴感，让读者感到**被理解**（避免空洞鸡汤、说教腔与廉价励志）。",
+      "· 追求**共鸣**：像替玩家说出心里那句没说出口的话，语气真诚、克制；勿堆砌网络热梗，勿晦涩造作。",
       "· 不要标题、不要括号说明、不要 markdown；**只输出诗正文**，每行一句，行末可押韵可不押。",
       "· 禁止修仙玄幻；保持现实职场/行业日常气质。",
       "",

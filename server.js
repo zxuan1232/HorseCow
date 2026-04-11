@@ -142,9 +142,9 @@ async function callGemini(apiKey, model, prompt, maxOutputTokens) {
 }
 
 const SYSTEM_JSON_SEGMENTS =
-  "只输出合法 JSON：segments 数组；plain 含 story、deltaAnger、deltaFatigue（±1 或 ±2，恰好一轴非零，以 ±1 为主）；choice 另含 choiceA、choiceB、outcomeA、outcomeB、effectA、effectB（同上）。story/outcome 须以第二人称「你」叙述。简体中文。";
+  "只输出合法 JSON：segments 数组；plain 含 story、deltaAnger、deltaFatigue（±1 或 ±2，恰好一轴非零，以 ±1 为主）；choice 另含 choiceA、choiceB、outcomeA、outcomeB、effectA、effectB（同上）。story/outcome 须以第二人称「你」叙述。同一日内各条与跨日剧情避免同质重复。简体中文。";
 const SYSTEM_PLAIN_TEXT =
-  "只输出用户任务要求的正文：简体中文；不要代码块与 markdown 围栏；不要 JSON；不要任何前言、标题或括号说明。";
+  "只输出用户任务要求的正文：简体中文；不要代码块与 markdown 围栏；不要 JSON；不要任何前言、标题或括号说明。若任务为短诗，语气宜真诚、可有温度与共鸣感，勿说教。";
 
 async function callOpenAICompatible(baseUrl, apiKey, model, prompt, maxTokens, usePlainSystem) {
   const mt = typeof maxTokens === "number" ? maxTokens : 1024;
@@ -306,7 +306,7 @@ app.post("/api/game-ai/chat", async function (req, res) {
       const model =
         (process.env.DASHSCOPE_MODEL && process.env.DASHSCOPE_MODEL.trim()) ||
         (process.env.BAILIAN_MODEL && process.env.BAILIAN_MODEL.trim()) ||
-        "qwen-plus";
+        "qwen3.6-plus";
       if (!key) {
         return res.status(500).json({
           ok: false,

@@ -84,6 +84,7 @@
   /** 点阵与结局「……」动画同节奏（每步间隔 ms） */
   var ELLIPSIS_DOT_STEP_MS = 300;
   var dayTransitionDotIntervalId = null;
+  var reportGlimpseDotIntervalId = null;
 
   function clearDayTransitionDotAnimation() {
     if (dayTransitionDotIntervalId !== null) {
@@ -99,6 +100,29 @@
     var n = (phase % 6) + 1;
     if (n === 6) return "……";
     return ".".repeat(n);
+  }
+
+  function clearReportGlimpseDotAnimation() {
+    if (reportGlimpseDotIntervalId !== null) {
+      clearInterval(reportGlimpseDotIntervalId);
+      reportGlimpseDotIntervalId = null;
+    }
+    if (reportGlimpseEl) reportGlimpseEl.classList.remove("report-glimpse--loading");
+  }
+
+  /** 与每日跨日过渡同节奏的点阵（ELLIPSIS_DOT_STEP_MS + ellipsisDotSuffixFromPhase） */
+  function startReportGlimpseLoadingAnimation() {
+    if (!reportGlimpseEl) return;
+    clearReportGlimpseDotAnimation();
+    reportGlimpseEl.classList.add("report-glimpse--loading");
+    var base = "掠影生成中";
+    var phase = 0;
+    function tick() {
+      reportGlimpseEl.textContent = base + ellipsisDotSuffixFromPhase(phase);
+      phase++;
+    }
+    tick();
+    reportGlimpseDotIntervalId = setInterval(tick, ELLIPSIS_DOT_STEP_MS);
   }
 
   function showDayTransitionForDay(dayIndex) {
@@ -474,6 +498,9 @@
   }
 
   function showScreen(id) {
+    if (id !== "report") {
+      clearReportGlimpseDotAnimation();
+    }
     Object.keys(screens).forEach(function (key) {
       const el = screens[key];
       const on = key === id;
@@ -680,6 +707,7 @@
   function runWeeklyGlimpsePoem() {
     if (!reportGlimpseEl || !player || !weekData || !window.WeekGen) {
       if (reportGlimpseEl) {
+        clearReportGlimpseDotAnimation();
         reportGlimpseEl.textContent = "";
         reportGlimpseEl.hidden = true;
       }
@@ -687,9 +715,10 @@
     }
     var extra = { choiceLog: choiceLog };
     reportGlimpseEl.hidden = false;
-    reportGlimpseEl.textContent = "掠影生成中…";
+    startReportGlimpseLoadingAnimation();
 
     function applyLocalFallback() {
+      clearReportGlimpseDotAnimation();
       reportGlimpseEl.textContent = window.WeekGen.generateLocalGlimpsePoem(
         player,
         weekData,
@@ -702,7 +731,10 @@
       window.AIClient
         .generateWeeklyGlimpsePoem(player, ctx)
         .then(function (poem) {
-          if (reportGlimpseEl) reportGlimpseEl.textContent = poem;
+          if (reportGlimpseEl) {
+            clearReportGlimpseDotAnimation();
+            reportGlimpseEl.textContent = poem;
+          }
         })
         .catch(function () {
           applyLocalFallback();

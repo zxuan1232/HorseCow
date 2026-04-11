@@ -1,7 +1,8 @@
 /**
  * 前端配置：不要在这里写百炼 / 方舟 / Gemini 等 API Key。
  * 本地：根目录 .env 配置 DASHSCOPE_API_KEY 等（见 .env.example），npm start。
- * 线上：在 Render 等平台 Environment 配置同名变量。实际模型由服务端 AI_PROVIDER 决定，见 DEPLOY.md。
+ * 线上：在 Render 等平台 Environment 配置同名变量。useServerProxy 为 true 时，实际模型由服务端
+ * DASHSCOPE_MODEL 决定（默认 qwen3.6-plus）；仅在不走代理、直连 Gemini/OpenAI 时使用下方 model。
  */
 window.GAME_AI_CONFIG = {
   enabled: true,
