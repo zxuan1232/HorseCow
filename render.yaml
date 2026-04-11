@@ -1,0 +1,17 @@
+# Render：Dashboard → New → Blueprint → 选含本文件的 GitHub 仓库
+# 部署时在界面填写 DASHSCOPE_API_KEY（阿里云百炼 API-KEY，不会进仓库）
+services:
+  - type: web
+    name: horse-cow-career
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/game-ai/health
+    envVars:
+      - key: AI_PROVIDER
+        value: bailian
+      - key: DASHSCOPE_API_KEY
+        sync: false
+      - key: DASHSCOPE_MODEL
+        value: qwen-turbo
