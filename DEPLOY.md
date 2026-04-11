@@ -9,7 +9,7 @@
    - **`AI_PROVIDER`** = `bailian`（可省略：服务端未设置时默认即为 `bailian`）
    - **`DASHSCOPE_API_KEY`** = 控制台复制的 API Key
 3. 可选：
-   - **`DASHSCOPE_MODEL`**：模型名，默认 `qwen3.6-plus`（也可用 `qwen-plus`、`qwen-turbo`、`qwen-max` 等，**以百炼控制台展示名为准**）
+   - **`DASHSCOPE_MODEL`**：模型名，默认 `qwen-turbo`（也可用 `qwen-plus`、`qwen3.6-plus`、`qwen-max` 等，**以百炼控制台展示名为准**）
    - **`DASHSCOPE_BASE_URL`**：默认 `https://dashscope.aliyuncs.com/compatible-mode/v1`（北京）；新加坡等国际地域见[阿里云说明](https://help.aliyun.com/zh/model-studio/qwen-api-via-openai-chat-completions)
 4. 与官方习惯一致时，也可用别名 **`BAILIAN_API_KEY`** / **`BAILIAN_MODEL`** / **`BAILIAN_BASE_URL`**（与上列三变量等价，二选一即可）。
 

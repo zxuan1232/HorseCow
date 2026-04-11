@@ -306,7 +306,7 @@ app.post("/api/game-ai/chat", async function (req, res) {
       const model =
         (process.env.DASHSCOPE_MODEL && process.env.DASHSCOPE_MODEL.trim()) ||
         (process.env.BAILIAN_MODEL && process.env.BAILIAN_MODEL.trim()) ||
-        "qwen3.6-plus";
+        "qwen-turbo";
       if (!key) {
         return res.status(500).json({
           ok: false,
