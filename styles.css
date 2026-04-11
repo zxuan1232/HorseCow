@@ -514,6 +514,81 @@ body {
   margin-bottom: 1rem;
 }
 
+.event-kind-badge {
+  display: inline-block;
+  margin: 0 0 0.5rem;
+  padding: 0.2rem 0.55rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: none;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+
+.event-panel--plain .event-kind-badge {
+  color: #a8c4a4;
+  border-color: rgba(125, 154, 122, 0.45);
+  background: rgba(125, 154, 122, 0.12);
+}
+
+.event-panel--choice-prompt .event-kind-badge,
+.event-panel--choice-outcome .event-kind-badge {
+  color: var(--accent);
+  border-color: rgba(201, 162, 39, 0.45);
+  background: rgba(201, 162, 39, 0.12);
+}
+
+.event-panel--plain .event-day-label {
+  color: #9eb89a;
+}
+
+.event-panel--choice-prompt .event-day-label,
+.event-panel--choice-outcome .event-day-label {
+  color: var(--accent);
+}
+
+.event-panel--plain .event-card {
+  border-left: 4px solid rgba(125, 154, 122, 0.65);
+  background: linear-gradient(
+    165deg,
+    rgba(125, 154, 122, 0.08) 0%,
+    var(--bg-elevated) 38%,
+    var(--bg-elevated) 100%
+  );
+  box-shadow: var(--shadow), 0 0 0 1px rgba(125, 154, 122, 0.12);
+}
+
+.event-panel--choice-prompt .event-card {
+  border-left: 4px solid rgba(201, 162, 39, 0.85);
+  background: linear-gradient(
+    165deg,
+    rgba(201, 162, 39, 0.1) 0%,
+    var(--bg-elevated) 42%,
+    var(--bg-elevated) 100%
+  );
+  box-shadow: var(--shadow), 0 0 0 1px rgba(201, 162, 39, 0.18);
+}
+
+.event-panel--choice-outcome .event-card {
+  border-left: 4px dashed rgba(201, 162, 39, 0.55);
+  background: linear-gradient(
+    165deg,
+    rgba(201, 162, 39, 0.06) 0%,
+    var(--bg-elevated) 50%,
+    var(--bg-elevated) 100%
+  );
+  box-shadow: var(--shadow), 0 0 0 1px rgba(201, 162, 39, 0.12);
+}
+
+.event-panel--neutral .event-card {
+  border-left: 1px solid var(--border);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow);
+}
+
 .event-day-label {
   margin: 0 0 0.35rem;
   font-size: 0.8rem;

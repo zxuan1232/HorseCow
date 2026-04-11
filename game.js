@@ -44,8 +44,10 @@
   const weekPlayerLine = document.getElementById("week-player-line");
   const weekStatsEl = document.getElementById("week-stats");
   const weekTabs = document.getElementById("week-tabs");
+  const eventPanel = document.getElementById("event-panel");
   const eventDayLabel = document.getElementById("event-day-label");
   const eventProgress = document.getElementById("event-progress");
+  const eventKindBadge = document.getElementById("event-kind-badge");
   const eventCard = document.getElementById("event-card");
   const eventStatFeedback = document.getElementById("event-stat-feedback");
   const btnEventNext = document.getElementById("btn-event-next");
@@ -60,6 +62,49 @@
       choiceHint.classList.toggle("choice-hint--visible", !!visible);
       choiceHint.textContent = visible ? "你会怎么做？" : "";
       choiceHint.setAttribute("aria-hidden", visible ? "false" : "true");
+    }
+  }
+
+  /** 非选择段（叙述）与选择段（抉择/后续）在版式与标签上区分 */
+  function syncEventPanelPresentation() {
+    if (!eventPanel) return;
+    var mode = "neutral";
+    if (pendingChoiceOutcome) {
+      mode = "choice-outcome";
+    } else if (pendingSegmentKind === "choice" && pendingChoices) {
+      mode = "choice-prompt";
+    } else if (pendingSegmentKind === "plain" || aiFeedbackState) {
+      mode = "plain";
+    }
+    eventPanel.classList.remove(
+      "event-panel--plain",
+      "event-panel--choice-prompt",
+      "event-panel--choice-outcome",
+      "event-panel--neutral",
+    );
+    eventPanel.classList.add(
+      mode === "plain"
+        ? "event-panel--plain"
+        : mode === "choice-prompt"
+          ? "event-panel--choice-prompt"
+          : mode === "choice-outcome"
+            ? "event-panel--choice-outcome"
+            : "event-panel--neutral",
+    );
+    if (eventKindBadge) {
+      var map = {
+        plain: "叙述",
+        "choice-prompt": "抉择",
+        "choice-outcome": "后续",
+      };
+      var lbl = map[mode];
+      if (lbl) {
+        eventKindBadge.hidden = false;
+        eventKindBadge.textContent = lbl;
+      } else {
+        eventKindBadge.hidden = true;
+        eventKindBadge.textContent = "";
+      }
     }
   }
 
@@ -1011,6 +1056,7 @@
       btnEventNext.hidden = false;
       btnEventNext.disabled = false;
       setChoiceUiVisible(false);
+      syncEventPanelPresentation();
       return;
     }
 
@@ -1066,6 +1112,7 @@
           btnEventNext.hidden = false;
           btnEventNext.disabled = false;
           setChoiceUiVisible(false);
+          syncEventPanelPresentation();
         }
       }, 100);
       return;
@@ -1134,6 +1181,7 @@
           btnEventNext.hidden = false;
           btnEventNext.disabled = false;
           setChoiceUiVisible(false);
+          syncEventPanelPresentation();
         }
       });
   }
@@ -1165,6 +1213,7 @@
       btnEventNext.textContent = "继续";
       btnEventNext.disabled = false;
       renderWeekTabs();
+      syncEventPanelPresentation();
       return;
     }
 
@@ -1183,6 +1232,7 @@
       btnEventNext.textContent = "继续";
       btnEventNext.disabled = false;
       renderWeekTabs();
+      syncEventPanelPresentation();
       return;
     }
 
@@ -1200,6 +1250,7 @@
       setChoiceUiVisible(false);
     }
     renderWeekTabs();
+    syncEventPanelPresentation();
   }
 
   function proceedAfterStatFeedback() {

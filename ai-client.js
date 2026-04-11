@@ -80,12 +80,12 @@
     return null;
   }
 
-  /** 提示模型尽量写足的篇幅（约 150～260 字为宜） */
-  var STORY_GUIDE_CHARS = 200;
-  /** 单条 story 绝对上限（含标点与空格） */
-  var STORY_HARD_MAX_CHARS = 320;
+  /** 单条 story 建议篇幅下限（字）；可与上一条长短错落 */
+  var STORY_SOFT_MIN_CHARS = 100;
+  /** 单条 story 硬性上限（含标点与空格；与 STORY_SOFT_MIN_CHARS 构成 50～150 字弹性区间） */
+  var STORY_HARD_MAX_CHARS = 200;
   /** 「本周掠影」短诗总字数上限（含标点与换行，宁短勿长） */
-  var WEEKLY_GLIMPSE_MAX_CHARS = 150;
+  var WEEKLY_GLIMPSE_MAX_CHARS = 200;
   /** 智能截断时，句读处至少保留这么长才采用（避免只剩半句话） */
   var STORY_MIN_BREAK_LEN = 12;
   var DELTA_MIN = -2;
@@ -355,9 +355,13 @@
       "② choice：除 choiceA、choiceB、effectA、effectB 外，**必须给 outcomeA、outcomeB**（各一段，约 40～120 字）：**同样以「你」为主语**写清身心变化，**须与 effect 一致**；两选项尽量一缓一耗或一升一降，避免两边都大幅加怒/加疲；**不要设计成两个选项都轻松减压**，可常见「小降 vs 小升/中升」或「一侧几乎不回血」。**每个 effect：deltaAnger 与 deltaFatigue 恰好一轴非零**，可正可负，禁止双非零或双零。",
     );
     lines.push(
-      "每条 story 请写完整、可读的一句话或小段，**建议约 " +
-        STORY_GUIDE_CHARS +
-        " 字以内**；**总长不得超过 " +
+      "每条 story 请写完整、可读；**篇幅建议在约 " +
+        STORY_SOFT_MIN_CHARS +
+        "～" +
+        STORY_HARD_MAX_CHARS +
+        " 字之间参差不齐**（有的可一笔带过偏短，有的可写足，但**不得超过 " +
+        STORY_HARD_MAX_CHARS +
+        " 字**）。**总长不得超过 " +
         STORY_HARD_MAX_CHARS +
         " 个字符**（含标点与空格）。勿写半句、勿在句中戛然而止；数值须与剧情一致，且**每条只体现一条轴**。",
     );
@@ -594,8 +598,8 @@
       isSundayBatch: dayIndex === 6,
     });
 
-    /** 略紧于「每条约 500 token」估算，减轻上游生成长度与等待（仍 cap 4096，避免截断 JSON） */
-    var maxTok = Math.min(4096, 720 + eventCount * 480);
+    /** 单条 story 上限 150 字量级，相应收紧输出 token，减轻等待（仍 cap 4096，避免截断 JSON） */
+    var maxTok = Math.min(4096, 560 + eventCount * 300);
 
     var chain;
     if (s.useServerProxy) {

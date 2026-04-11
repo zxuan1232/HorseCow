@@ -941,7 +941,7 @@
   }
 
   /** 与 AI 侧 WEEKLY_GLIMPSE_MAX_CHARS 一致，掠影宜短 */
-  const GLIMPSE_POEM_MAX_CHARS = 150;
+  const GLIMPSE_POEM_MAX_CHARS = 300;
 
   function trimGlimpsePoemLen(s, max) {
     const t = String(s || "");
