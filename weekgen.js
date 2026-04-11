@@ -940,6 +940,16 @@
     return text;
   }
 
+  /** 与 AI 侧 WEEKLY_GLIMPSE_MAX_CHARS 一致，掠影宜短 */
+  const GLIMPSE_POEM_MAX_CHARS = 150;
+
+  function trimGlimpsePoemLen(s, max) {
+    const t = String(s || "");
+    const chars = Array.from(t);
+    if (chars.length <= max) return t;
+    return chars.slice(0, max).join("") + "…";
+  }
+
   /** AI 不可用时本地押韵/排比回退 */
   function generateLocalGlimpsePoem(profile, daysData, extra) {
     const kw = getKw(profile.industry);
@@ -947,20 +957,20 @@
     const seed = (hashProfile(profile) ^ total ^ 0xbeef5eed) >>> 0;
     const rnd = mulberry32(seed);
     const pool = [
-      `你在「${kw.scene}」来回折返，\n` +
-        `${total} 段日子像未读红点，\n` +
-        `烦归烦，你也知道：能撑过来的，都不只是运气。`,
-      `闹钟与键盘合谋，\n` +
-        `把周一到周日串成一根线，\n` +
-        `线在「${kw.scene}」打了结——你慢慢解，天总会亮一点。`,
-      `有人把活丢成抛物线，\n` +
-        `你在「${kw.scene}」里接球，\n` +
-        `风从 ${kw.crisis} 那边吹来，你仍把衣角掖好，继续走。`,
-      `本周像一卷过期的胶带，\n` +
-        `越撕越黏的是「${profile.industry}」日常，\n` +
-        `可你还愿意把下一格日历，贴得端正——这就够了。`,
+      `你在「${kw.scene}」折返，\n` +
+        `${total} 段日子像红点未读；\n` +
+        `烦归烦，撑过来的都不只是运气。`,
+      `闹钟与键盘把七天串成线，\n` +
+        `「${kw.scene}」里打了个结——\n` +
+        `你慢慢解，天会亮一点。`,
+      `活被抛成抛物线，你在「${kw.scene}」接球；\n` +
+        `${kw.crisis} 的风掠过，你仍掖好衣角往前走。`,
+      `本周像一卷胶带，\n` +
+        `「${profile.industry}」越撕越黏；\n` +
+        `下一格日历，你还贴得端正。`,
     ];
-    return pool[Math.floor(rnd() * pool.length)];
+    const raw = pool[Math.floor(rnd() * pool.length)];
+    return trimGlimpsePoemLen(raw, GLIMPSE_POEM_MAX_CHARS);
   }
 
   function buildWeeklyReport(profile, daysData, extra) {

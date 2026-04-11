@@ -84,6 +84,8 @@
   var STORY_GUIDE_CHARS = 200;
   /** 单条 story 绝对上限（含标点与空格） */
   var STORY_HARD_MAX_CHARS = 320;
+  /** 「本周掠影」短诗总字数上限（含标点与换行，宁短勿长） */
+  var WEEKLY_GLIMPSE_MAX_CHARS = 150;
   /** 智能截断时，句读处至少保留这么长才采用（避免只剩半句话） */
   var STORY_MIN_BREAK_LEN = 12;
   var DELTA_MIN = -2;
@@ -480,7 +482,7 @@
   var SYSTEM_JSON_SEGMENTS =
     "只输出合法 JSON：segments 数组；plain 含 story、deltaAnger、deltaFatigue（±1 或 ±2，恰好一轴非零，以 ±1 为主）；choice 另含 choiceA、choiceB、outcomeA、outcomeB、effectA、effectB（同上）。story/outcome 须以第二人称「你」叙述。同一日内各条与跨日剧情避免同质重复。简体中文。";
   var SYSTEM_PLAIN_TEXT =
-    "只输出用户任务要求的正文：简体中文；不要代码块与 markdown 围栏；不要 JSON；不要任何前言、标题或括号说明。若任务为短诗，语气宜真诚、可有温度与共鸣感，勿说教。";
+    "只输出用户任务要求的正文：简体中文；不要代码块与 markdown 围栏；不要 JSON；不要任何前言、标题或括号说明。若任务为「本周掠影」短诗，须遵守字数上限，语气宜真诚、可有温度与共鸣感，勿说教。";
 
   function callOpenAICompatible(baseUrl, apiKey, model, prompt, maxTokens, usePlainSystem) {
     var mt = typeof maxTokens === "number" ? maxTokens : 1024;
@@ -627,7 +629,10 @@
     var s = String(raw || "").trim();
     var fence = s.match(/```(?:\w*)?\s*([\s\S]*?)```/);
     if (fence) s = fence[1].trim();
-    if (s.length > 1400) s = s.slice(0, 1400) + "…";
+    var chars = Array.from(s);
+    if (chars.length > WEEKLY_GLIMPSE_MAX_CHARS) {
+      s = chars.slice(0, WEEKLY_GLIMPSE_MAX_CHARS).join("") + "…";
+    }
     return s || "";
   }
 
@@ -640,7 +645,9 @@
     var lines = [
       "你是《牛马的一周》周报诗人。请**只根据**下方「本周经历摘要」写一首短诗，用于「本周掠影」栏目。",
       "要求：",
-      "· 共 8～14 行为宜；现代诗或仿古体（如七言截句、词味、乐府感）均可；",
+      "· **总字数严格控制在约 " +
+        WEEKLY_GLIMPSE_MAX_CHARS +
+        " 字以内（含标点与换行），宁短勿长**；3～6 行短章或几句即可，不必写长；现代诗或仿古体均可。",
       "· 必须用第二人称「你」，与摘要中的情绪、场景**如实呼应**；在概括本周酸甜苦辣的同时，**落笔带一点温度**：可写微光、释然、笨拙的坚持、自嘲里的轻松，或安静的无评判的陪伴感，让读者感到**被理解**（避免空洞鸡汤、说教腔与廉价励志）。",
       "· 追求**共鸣**：像替玩家说出心里那句没说出口的话，语气真诚、克制；勿堆砌网络热梗，勿晦涩造作。",
       "· 不要标题、不要括号说明、不要 markdown；**只输出诗正文**，每行一句，行末可押韵可不押。",
@@ -654,7 +661,7 @@
     if (!s.useServerProxy && (!s.apiKey || !s.apiKey.trim())) {
       return Promise.reject(new Error("未配置 API Key"));
     }
-    var maxTok = Math.min(1024, 420);
+    var maxTok = Math.min(512, 280);
     var chain;
     if (s.useServerProxy) {
       chain = callViaServerProxy(prompt, maxTok, s, "plainText");

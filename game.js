@@ -280,6 +280,28 @@
     ensureAiDayBatch(next, nNext, pk).catch(function () {});
   }
 
+  /**
+   * 再提前一档：当天「倒数第二段」与「最后一段」均为 plain 时，此时 choiceLog 已含本日全部选择，
+   * 且下一天 prompt 不依赖「最后一段」上的选择，可在玩家阅读倒数第二段时即预取下一天（多抢约一整段的等待时间）。
+   * 若倒数第二段为 choice 或最后一段为 choice，仍只依赖 schedulePrefetchAiNextDayIfReady / onPickChoice，避免错上下文。
+   */
+  function schedulePrefetchAiNextDayEarlyIfReady(dayIndex, segmentIndex) {
+    if (!weekData || weekData.mode !== "ai" || !weekData.segmentsFromAi) return;
+    if (!window.AIClient || !window.AIClient.isAiReady()) return;
+    var next = dayIndex + 1;
+    if (next > 6) return;
+    var nCur = dayEventCounts[dayIndex];
+    if (nCur < 2) return;
+    if (segmentIndex !== nCur - 2) return;
+    var c = daySegmentCache[dayIndex];
+    if (!c || !c[nCur - 2] || !c[nCur - 1]) return;
+    if (c[nCur - 1].eventType !== "plain") return;
+    if (c[nCur - 2].eventType !== "plain") return;
+    var nNext = dayEventCounts[next];
+    var pk = dayPlainCounts[next];
+    ensureAiDayBatch(next, nNext, pk).catch(function () {});
+  }
+
   function clampStat(v) {
     return Math.max(0, Math.min(STAT_MAX, v));
   }
@@ -1001,6 +1023,7 @@
       btnEventNext.disabled = false;
       if (!endedByEnding) renderAiEventDisplay();
       schedulePrefetchAiNextDayIfReady(d, i);
+      schedulePrefetchAiNextDayEarlyIfReady(d, i);
       return;
     }
 
@@ -1092,6 +1115,7 @@
           btnEventNext.disabled = false;
           if (!endedByEnding2) renderAiEventDisplay();
           schedulePrefetchAiNextDayIfReady(d, i);
+          schedulePrefetchAiNextDayEarlyIfReady(d, i);
         });
       })
       .catch(function (err) {
