@@ -359,6 +359,6 @@ app.use(function (req, res, next) {
 
 const PORT = parseInt(process.env.PORT || "3000", 10);
 app.listen(PORT, function () {
-  console.log("HorseCow 服务已启动: http://localhost:" + PORT);
+  console.log("牛马体验器 服务已启动: http://localhost:" + PORT);
   console.log("AI 提供方: " + (process.env.AI_PROVIDER || "bailian"));
 });
